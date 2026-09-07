@@ -1,0 +1,78 @@
+import { Offering } from './types';
+
+export const mockOfferings: Offering[] = [
+  {
+    id: '1',
+    name: 'Quantum Key Pro',
+    sku: 'QK-SXN-5LK',
+    category: 'Electronics',
+    subcategory: 'Hardware / Input Devices',
+    type: 'Product',
+    price: 249.00,
+    cost: 112.00,
+    margin: 55.2,
+    stock: 142,
+    stockLevel: 'In Stock',
+    status: 'Active',
+    vendor: 'TechCore',
+    updated: '2h ago',
+    image: '/images/products/quantum-key-pro.svg',
+  },
+  {
+    id: '2',
+    name: 'Aura Ergonomic Chair',
+    sku: 'CHR-AURA-GRY',
+    category: 'Workspace',
+    subcategory: 'Furniture / Seating',
+    type: 'Product',
+    price: 895.00,
+    cost: 420.00,
+    margin: 53.1,
+    stock: 12,
+    stockLevel: 'Low Stock',
+    status: 'Active',
+    vendor: 'ErgoFurniture Co',
+    updated: '5h ago',
+    image: '/images/products/aura-chair.svg',
+  },
+  {
+    id: '3',
+    name: 'Lumina Desk Arc',
+    sku: 'LUM-ARC-ALU',
+    category: 'Workspace',
+    subcategory: 'Lighting / Décor',
+    type: 'Product',
+    price: 159.00,
+    cost: 65.00,
+    margin: 59.1,
+    stock: 0,
+    stockLevel: 'Pre-order',
+    status: 'Draft',
+    vendor: 'LightWorks Ltd',
+    updated: 'Yesterday',
+    image: '/images/products/lumina-desk.svg',
+  },
+  {
+    id: '4',
+    name: 'Elite Workspace Setup',
+    sku: 'SRV-WS-01',
+    category: 'Services',
+    subcategory: 'Consulting / Installation',
+    type: 'Service',
+    price: 1200.00,
+    cost: 450.00,
+    margin: 62.5,
+    stock: 0,
+    stockLevel: 'Unlimited',
+    status: 'Active',
+    vendor: 'WorkspacePro',
+    updated: '3d ago',
+    image: '/images/products/elite-workspace.svg',
+  },
+];
+
+export const categories = ['All', 'Electronics', 'Workspace', 'Services'];
+export const types = ['Any', 'Product', 'Service'];
+export const statuses = ['Active', 'Draft', 'Inactive'];
+export const vendors = ['All', 'TechCore', 'ErgoFurniture Co', 'LightWorks Ltd', 'WorkspacePro'];
+export const stockLevels = ['Any Status', 'In Stock', 'Low Stock', 'Pre-order', 'Unlimited'];
