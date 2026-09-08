@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   description: "Enterprise SaaS platform for managing product and service offerings",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"

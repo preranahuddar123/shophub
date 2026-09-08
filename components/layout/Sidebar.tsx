@@ -37,7 +37,9 @@ export default function Sidebar() {
       <nav className="flex-1 p-3 pt-4">
         <ul className="space-y-0.5">
           {menuItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href ||
+              (item.href === '/offerings' && pathname.startsWith('/offerings'));
             return (
               <li key={item.href}>
                 <Link
@@ -76,6 +78,14 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
+
+      {/* Bottom Action - View Reports */}
+      <div className="p-4 border-t border-gray-100 mt-auto">
+        <button className="w-full py-2.5 px-3 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-xs font-semibold text-gray-700 transition-colors shadow-xs">
+          View Reports
+        </button>
+      </div>
     </aside>
   );
 }
+

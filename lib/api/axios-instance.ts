@@ -39,13 +39,8 @@ apiClient.interceptors.response.use(
       // Server responded with error status
       console.error('API Error:', error.response.status, error.response.data);
     } else if (error.request) {
-      // Request made but no response - likely CORS issue
-      console.error('Network/CORS Error:', error.message);
-      if (error.message.includes('CORS') || error.message.includes('cors')) {
-        console.error(
-          'CORS Error detected. The backend may not have CORS enabled for this origin.'
-        );
-      }
+      // Backend offline
+      console.warn('Backend offline (using mock UI data):', error.message);
     } else {
       // Something else happened
       console.error('Error:', error.message);

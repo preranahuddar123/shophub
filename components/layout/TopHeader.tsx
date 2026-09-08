@@ -1,17 +1,19 @@
 'use client';
 
+import Image from 'next/image';
+
 interface TopHeaderProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
-export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProps) {
+export default function TopHeader({ searchQuery = '', onSearchChange }: TopHeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
       <div className="h-full px-6 flex items-center justify-between gap-6">
         {/* Left: Page Label */}
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-900">Offerings</span>
+          <span className="text-sm font-bold text-gray-900 tracking-tight">ERP Offerings</span>
         </div>
 
         {/* Center: Search Bar */}
@@ -35,17 +37,17 @@ export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProp
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
-              placeholder="Search Master Catalog..."
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
+              placeholder="Search product SKU..."
             />
           </div>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          {/* Notifications */}
-          <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+          {/* Notifications with red dot */}
+          <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
             <svg
               className="h-5 w-5"
               fill="none"
@@ -59,6 +61,7 @@ export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProp
                 d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
               />
             </svg>
+            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
           </button>
 
           {/* Help */}
@@ -79,7 +82,7 @@ export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProp
           </button>
 
           {/* Create Offering Button */}
-          <button className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors">
+          <button className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-xs font-semibold hover:bg-gray-800 transition-colors shadow-xs">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -87,10 +90,14 @@ export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProp
           </button>
 
           {/* User Avatar */}
-          <button className="ml-2">
-            <div className="h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center text-white text-xs font-medium">
-              JD
-            </div>
+          <button className="ml-2 relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 hover:ring-2 hover:ring-gray-300 transition-all">
+            <Image
+              src="/images/avatar.jpg"
+              alt="User avatar"
+              fill
+              className="object-cover"
+              sizes="32px"
+            />
           </button>
         </div>
       </div>

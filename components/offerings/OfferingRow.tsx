@@ -1,3 +1,6 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { Offering } from '@/lib/types';
 
 interface OfferingRowProps {
@@ -5,6 +8,7 @@ interface OfferingRowProps {
 }
 
 export default function OfferingRow({ offering }: OfferingRowProps) {
+  const router = useRouter();
   // Type badge styling
   const typeBadgeClass =
     offering.type === 'Product'
@@ -65,10 +69,23 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
   const stockDisplay = getStockDisplay();
 
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+    <tr
+      onClick={() => router.push('/offerings/single_offering')}
+      className="border-b border-gray-100 hover:bg-gray-50/80 cursor-pointer transition-colors group"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          router.push('/offerings/single_offering');
+        }
+      }}
+    >
       {/* Offering Name - product.offering_name */}
       <td className="px-6 py-4">
-        <div className="text-sm font-medium text-gray-900">{offering.name}</div>
+        <div className="text-sm font-semibold text-gray-900 group-hover:text-black transition-colors">
+          {offering.name}
+        </div>
       </td>
 
       {/* SKU - product.sku_id */}

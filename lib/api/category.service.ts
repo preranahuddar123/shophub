@@ -1,319 +1,183 @@
-import apiClient from './axios-instance';
 import {
-  PrimaryCategoryResponse,
-  SecondaryCategoryResponse,
   PrimaryCategory,
   SecondaryCategory,
-  ApiError,
 } from '../types/api.types';
+import { DUMMY_PRODUCTS } from './product.service';
 
-/**
- * Safely parse JSON that may contain infinite circular references or trailing error messages
- * from backend streaming responses.
- */
-const sanitizeAndParseJson = (raw: any): any => {
-  if (typeof raw !== 'string') return raw;
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) {
-    return raw;
-  }
-
-  // 1. Try standard JSON parse first
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    // 2. Try handling circular reference recursion cutoff
-    const circularMarkers = [
-      ',"primaryCategory":{"primaryCategoryId"',
-      ',"primaryCategory":{',
-    ];
-    for (const marker of circularMarkers) {
-      const idx = trimmed.indexOf(marker);
-      if (idx !== -1) {
-        const candidate = trimmed.slice(0, idx);
-        const stack: string[] = [];
-        let inString = false;
-        let escaped = false;
-
-        for (let i = 0; i < candidate.length; i++) {
-          const c = candidate[i];
-          if (escaped) {
-            escaped = false;
-            continue;
-          }
-          if (c === '\\') {
-            escaped = true;
-            continue;
-          }
-          if (c === '"') {
-            inString = !inString;
-            continue;
-          }
-          if (!inString) {
-            if (c === '{') stack.push('}');
-            else if (c === '[') stack.push(']');
-            else if (c === '}' || c === ']') stack.pop();
-          }
-        }
-
-        const closer = stack.reverse().join('');
-        try {
-          return JSON.parse(candidate + closer);
-        } catch {
-          // continue to next marker if parse fails
-        }
-      }
-    }
-    return raw;
-  }
-};
-
-/**
- * Normalize category response from API
- * Handles various structures:
- * 1. Array of category wrappers: [{ audit_trail_notes: ..., primaryCategory: { ... } }]
- * 2. Array of categories directly: [{ primaryCategoryId: ..., products: [...] }]
- * 3. Object with primaryCategory/secondaryCategory wrapper: { primaryCategory: { ... } }
- * 4. Object with data/categories array: { data: [...] } or { categories: [...] }
- */
-export const normalizeCategoryResponse = <T>(
-  responseData: any,
-  wrapperKey: 'primaryCategory' | 'secondaryCategory'
-): T[] => {
-  if (!responseData) return [];
-  responseData = sanitizeAndParseJson(responseData);
-  if (!responseData || typeof responseData === 'string') return [];
-
-  // Helper to extract category object from an item
-  const extractCategory = (item: any): any => {
-    if (!item || typeof item !== 'object') return item;
-    if (item[wrapperKey]) {
-      return {
-        ...item[wrapperKey],
-        audit_trail_notes: item.audit_trail_notes,
-      };
-    }
-    if (wrapperKey === 'primaryCategory' && item.primaryCategory) {
-      return item.primaryCategory;
-    }
-    if (wrapperKey === 'secondaryCategory' && item.secondaryCategory) {
-      return item.secondaryCategory;
-    }
-    return item;
-  };
-
-  // 1. Direct Array
-  if (Array.isArray(responseData)) {
-    return responseData.map(extractCategory);
-  }
-
-  // 2. Object with nested array
-  if (Array.isArray(responseData.data)) {
-    return responseData.data.map(extractCategory);
-  }
-  if (Array.isArray(responseData.categories)) {
-    return responseData.categories.map(extractCategory);
-  }
-  if (Array.isArray(responseData.primaryCategories)) {
-    return responseData.primaryCategories.map(extractCategory);
-  }
-  if (Array.isArray(responseData.secondaryCategories)) {
-    return responseData.secondaryCategories.map(extractCategory);
-  }
-
-  // 3. Object with single category wrapper
-  if (responseData[wrapperKey]) {
-    return [
+export const DUMMY_PRIMARY_CATEGORIES: PrimaryCategory[] = [
+  {
+    primaryCategoryId: 1,
+    primaryCategoryName: 'Furniture',
+    primaryCategoryDescription: 'Modern corporate and executive furniture',
+    subCategory: [
       {
-        ...responseData[wrapperKey],
-        audit_trail_notes: responseData.audit_trail_notes,
+        secondaryCategoryId: 101,
+        secondaryCategoryName: 'Lounge Seating',
+        secondaryCategoryDescription: 'Executive and reception lounge chairs',
+        products: [DUMMY_PRODUCTS[0] as any],
       },
-    ];
-  }
-  if (wrapperKey === 'primaryCategory' && responseData.primaryCategory) {
-    return [responseData.primaryCategory];
-  }
-  if (wrapperKey === 'secondaryCategory' && responseData.secondaryCategory) {
-    return [responseData.secondaryCategory];
-  }
+      {
+        secondaryCategoryId: 102,
+        secondaryCategoryName: 'Task Chairs',
+        secondaryCategoryDescription: 'Ergonomic work chairs',
+        products: [DUMMY_PRODUCTS[1] as any],
+      },
+    ],
+    products: [DUMMY_PRODUCTS[0], DUMMY_PRODUCTS[1], DUMMY_PRODUCTS[3]] as any,
+  },
+  {
+    primaryCategoryId: 2,
+    primaryCategoryName: 'Lighting',
+    primaryCategoryDescription: 'Architectural and task illumination',
+    subCategory: [
+      {
+        secondaryCategoryId: 201,
+        secondaryCategoryName: 'Desk Lighting',
+        secondaryCategoryDescription: 'Precision balanced task lamps',
+        products: [DUMMY_PRODUCTS[2] as any],
+      },
+    ],
+    products: [DUMMY_PRODUCTS[2]] as any,
+  },
+  {
+    primaryCategoryId: 3,
+    primaryCategoryName: 'Services',
+    primaryCategoryDescription: 'Professional workplace consulting and setup',
+    subCategory: [
+      {
+        secondaryCategoryId: 301,
+        secondaryCategoryName: 'Ergonomic Calibration',
+        secondaryCategoryDescription: 'On-site workstation setup',
+        products: [DUMMY_PRODUCTS[4] as any],
+      },
+    ],
+    products: [DUMMY_PRODUCTS[4]] as any,
+  },
+];
 
-  // 4. Object that is directly a category
-  if (
-    responseData.primaryCategoryId !== undefined ||
-    responseData.secondaryCategoryId !== undefined ||
-    responseData.products !== undefined
-  ) {
-    return [responseData];
-  }
-
-  return [];
-};
+export const DUMMY_SECONDARY_CATEGORIES: SecondaryCategory[] = [
+  {
+    secondaryCategoryId: 101,
+    secondaryCategoryName: 'Lounge Seating',
+    secondaryCategoryDescription: 'Executive and reception lounge chairs',
+    products: [DUMMY_PRODUCTS[0] as any],
+  },
+  {
+    secondaryCategoryId: 102,
+    secondaryCategoryName: 'Task Chairs',
+    secondaryCategoryDescription: 'Ergonomic work chairs',
+    products: [DUMMY_PRODUCTS[1] as any],
+  },
+  {
+    secondaryCategoryId: 201,
+    secondaryCategoryName: 'Desk Lighting',
+    secondaryCategoryDescription: 'Precision balanced task lamps',
+    products: [DUMMY_PRODUCTS[2] as any],
+  },
+  {
+    secondaryCategoryId: 301,
+    secondaryCategoryName: 'Ergonomic Calibration',
+    secondaryCategoryDescription: 'On-site workstation setup',
+    products: [DUMMY_PRODUCTS[4] as any],
+  },
+];
 
 /**
- * Fetch all primary categories
- * GET /categories/getAllCategories
+ * Fetch all primary categories - dummy data for UI testing
  */
 export const getAllPrimaryCategories = async (): Promise<PrimaryCategory[]> => {
-  try {
-    const response = await apiClient.get<PrimaryCategoryResponse>('/categories/getAllCategories');
-    return normalizeCategoryResponse<PrimaryCategory>(response.data, 'primaryCategory');
-  } catch (error: any) {
-    if (error.response?.data) {
-      const recovered = normalizeCategoryResponse<PrimaryCategory>(error.response.data, 'primaryCategory');
-      if (recovered.length > 0) {
-        return recovered;
-      }
-    }
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to fetch primary categories',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  return DUMMY_PRIMARY_CATEGORIES;
 };
 
 /**
  * Fetch one primary category by ID
- * GET /categories/getCategory/{primaryCategoryId}
  */
 export const getPrimaryCategoryById = async (
   primaryCategoryId: string | number
 ): Promise<PrimaryCategory | null> => {
-  try {
-    const response = await apiClient.get<PrimaryCategory>(`/categories/getCategory/${primaryCategoryId}`);
-    const normalized = normalizeCategoryResponse<PrimaryCategory>(response.data, 'primaryCategory');
-    return normalized.length > 0 ? normalized[0] : null;
-  } catch (error: any) {
-    if (error.response?.data) {
-      const recovered = normalizeCategoryResponse<PrimaryCategory>(error.response.data, 'primaryCategory');
-      if (recovered.length > 0) {
-        return recovered[0];
-      }
-    }
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to fetch primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  const found = DUMMY_PRIMARY_CATEGORIES.find(
+    (c) => String(c.primaryCategoryId) === String(primaryCategoryId)
+  );
+  return found || DUMMY_PRIMARY_CATEGORIES[0];
 };
 
 /**
- * Fetch all secondary categories
- * GET /secondary-categories/getAllCategories
+ * Fetch all secondary categories - dummy data for UI testing
  */
 export const getAllSecondaryCategories = async (): Promise<SecondaryCategory[]> => {
-  try {
-    const response = await apiClient.get<SecondaryCategoryResponse>('/secondary-categories/getAllCategories');
-    return normalizeCategoryResponse<SecondaryCategory>(response.data, 'secondaryCategory');
-  } catch (error: any) {
-    if (error.response?.data) {
-      const recovered = normalizeCategoryResponse<SecondaryCategory>(error.response.data, 'secondaryCategory');
-      if (recovered.length > 0) {
-        return recovered;
-      }
-    }
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to fetch secondary categories',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  return DUMMY_SECONDARY_CATEGORIES;
 };
 
 /**
- * Fetch all secondary categories belonging to the selected primary category
- * GET /secondary-categories/getCategoriesByPrimary/{primaryCategoryId}
+ * Fetch secondary categories by primary category ID
  */
 export const getCategoriesByPrimary = async (
   primaryCategoryId: string | number
 ): Promise<SecondaryCategory[]> => {
-  try {
-    const response = await apiClient.get<SecondaryCategoryResponse>(
-      `/secondary-categories/getCategoriesByPrimary/${primaryCategoryId}`
-    );
-    return normalizeCategoryResponse<SecondaryCategory>(response.data, 'secondaryCategory');
-  } catch (error: any) {
-    if (error.response?.data) {
-      const recovered = normalizeCategoryResponse<SecondaryCategory>(error.response.data, 'secondaryCategory');
-      if (recovered.length > 0) {
-        return recovered;
-      }
-    }
-    const apiError: ApiError = {
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to fetch secondary categories for primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  const primary = DUMMY_PRIMARY_CATEGORIES.find(
+    (c) => String(c.primaryCategoryId) === String(primaryCategoryId)
+  );
+  return (primary?.subCategory as SecondaryCategory[]) || DUMMY_SECONDARY_CATEGORIES;
 };
 
 /**
  * Fetch one secondary category by ID
- * GET /secondary-categories/getCategory/{secondaryCategoryId}
  */
 export const getSecondaryCategoryById = async (
   secondaryCategoryId: string | number
 ): Promise<SecondaryCategory | null> => {
-  try {
-    const response = await apiClient.get<SecondaryCategory>(
-      `/secondary-categories/getCategory/${secondaryCategoryId}`
-    );
-    const normalized = normalizeCategoryResponse<SecondaryCategory>(response.data, 'secondaryCategory');
-    return normalized.length > 0 ? normalized[0] : null;
-  } catch (error: any) {
-    if (error.response?.data) {
-      const recovered = normalizeCategoryResponse<SecondaryCategory>(error.response.data, 'secondaryCategory');
-      if (recovered.length > 0) {
-        return recovered[0];
-      }
-    }
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to fetch secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  const found = DUMMY_SECONDARY_CATEGORIES.find(
+    (c) => String(c.secondaryCategoryId) === String(secondaryCategoryId)
+  );
+  return found || DUMMY_SECONDARY_CATEGORIES[0];
 };
 
-/**
- * Delete a primary category by ID
- * DELETE /categories/deleteCategory/{id}
- */
-export const deletePrimaryCategory = async (primaryCategoryId: string | number): Promise<void> => {
-  try {
-    await apiClient.delete(`/categories/deleteCategory/${primaryCategoryId}`);
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to delete primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+export const createPrimaryCategory = async (payload: any): Promise<PrimaryCategory> => {
+  const newCat: PrimaryCategory = {
+    primaryCategoryId: Date.now(),
+    primaryCategoryName: payload.primaryCategoryName || 'New Primary Category',
+    primaryCategoryDescription: payload.primaryCategoryDescription,
+  };
+  DUMMY_PRIMARY_CATEGORIES.push(newCat);
+  return newCat;
 };
 
-/**
- * Delete a secondary category by ID
- * DELETE /secondary-categories/deleteCategory/{id}
- */
-export const deleteSecondaryCategory = async (secondaryCategoryId: string | number): Promise<void> => {
-  try {
-    await apiClient.delete(`/secondary-categories/deleteCategory/${secondaryCategoryId}`);
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to delete secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+export const createSecondaryCategory = async (payload: any): Promise<SecondaryCategory> => {
+  const newCat: SecondaryCategory = {
+    secondaryCategoryId: Date.now(),
+    secondaryCategoryName: payload.secondaryCategoryName || 'New Secondary Category',
+    secondaryCategoryDescription: payload.secondaryCategoryDescription,
+  };
+  DUMMY_SECONDARY_CATEGORIES.push(newCat);
+  return newCat;
+};
+
+export const updatePrimaryCategory = async (
+  id: string | number,
+  payload: any
+): Promise<PrimaryCategory> => {
+  return {
+    primaryCategoryId: id,
+    primaryCategoryName: payload.primaryCategoryName,
+    primaryCategoryDescription: payload.primaryCategoryDescription,
+  };
+};
+
+export const updateSecondaryCategory = async (
+  id: string | number,
+  payload: any
+): Promise<SecondaryCategory> => {
+  return {
+    secondaryCategoryId: id,
+    secondaryCategoryName: payload.secondaryCategoryName,
+    secondaryCategoryDescription: payload.secondaryCategoryDescription,
+  };
+};
+
+export const deletePrimaryCategory = async (_id: string | number): Promise<void> => {
+  return;
+};
+
+export const deleteSecondaryCategory = async (_id: string | number): Promise<void> => {
+  return;
 };
