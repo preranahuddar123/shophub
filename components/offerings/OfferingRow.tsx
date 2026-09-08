@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { Offering } from '@/lib/types';
 
 interface OfferingRowProps {
@@ -67,36 +66,22 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-      {/* Offering Name with Image */}
+      {/* Offering Name - product.offering_name */}
       <td className="px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <Image
-              src={offering.image}
-              alt={offering.name}
-              width={40}
-              height={40}
-              className="object-cover"
-            />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-gray-900">{offering.name}</div>
-            <div className="text-xs text-gray-500">{offering.subcategory}</div>
-          </div>
-        </div>
+        <div className="text-sm font-medium text-gray-900">{offering.name}</div>
       </td>
 
-      {/* SKU */}
+      {/* SKU - product.sku_id */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-700">{offering.sku}</div>
       </td>
 
-      {/* Category */}
+      {/* Category - product.category (e.g. LIGHTING) */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-900">{offering.category}</div>
       </td>
 
-      {/* Type */}
+      {/* Type - product.offering_type */}
       <td className="px-6 py-4">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeBadgeClass}`}
@@ -105,22 +90,28 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </span>
       </td>
 
-      {/* Price */}
+      {/* Price - product.pricing.selling_price */}
       <td className="px-6 py-4">
         <div>
           <div className="text-sm font-semibold text-gray-900">
-            ${offering.price.toFixed(2)}
+            ₹{offering.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
-          <div className="text-xs text-gray-500">Cost: ${offering.cost.toFixed(2)}</div>
+          <div className="text-xs text-gray-500">
+            Cost: ₹{offering.cost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </div>
         </div>
       </td>
 
-      {/* Margin */}
+      {/* Margin - product.pricing.margin_percentage */}
       <td className="px-6 py-4">
-        <div className="text-sm font-semibold text-green-600">{offering.margin.toFixed(1)}%</div>
+        <div className="text-sm font-semibold text-green-600">
+          {!isNaN(offering.margin) && offering.margin !== 0
+            ? `${offering.margin.toFixed(1)}%`
+            : '—'}
+        </div>
       </td>
 
-      {/* Stock */}
+      {/* Stock - product.inventory.current_stock */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}></span>
@@ -135,13 +126,18 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </div>
       </td>
 
-      {/* Status */}
+      {/* Status - product.internal.visibility_status.publishing_status */}
       <td className="px-6 py-4">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${statusBadgeClass}`}
         >
           {offering.status}
         </span>
+      </td>
+
+      {/* Vendor - product.offering_name */}
+      <td className="px-6 py-4">
+        <div className="text-sm text-gray-700">{offering.vendor}</div>
       </td>
 
       {/* Updated */}

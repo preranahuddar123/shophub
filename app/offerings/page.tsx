@@ -1,215 +1,200 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import StoreProvider from '@/components/providers/StoreProvider';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import OfferingFilters from '@/components/offerings/OfferingFilters';
 import OfferingTable from '@/components/offerings/OfferingTable';
 import Pagination from '@/components/offerings/Pagination';
-import CatalogHealthBanner from '@/components/offerings/CatalogHealthBanner';
-import { mockOfferings } from '@/lib/mockData';
-import { FilterState } from '@/lib/types';
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
+import {
+  fetchBackendOfferings,
+  setCurrentPage,
+  setHierarchyOfferings,
+} from '@/lib/store/slices/offeringsSlice';
+import { setSearch } from '@/lib/store/slices/filtersSlice';
+import { Product } from '@/lib/types/api.types';
 
-const ITEMS_PER_PAGE = 10;
-const TOTAL_ITEMS = 128; // Mock total for pagination
+function OfferingsContent() {
+  const dispatch = useAppDispatch();
+  const { offerings, currentPage, pageSize, totalElements, totalPages, isLoading } =
+    useAppSelector((state) => state.offerings);
+  const categories = useAppSelector((state) => state.categories);
+  const filters = useAppSelector((state) => state.filters);
 
-export default function OfferingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState<FilterState>({
-    category: 'All',
-    type: 'Any',
-    status: 'Active',
-    vendor: 'All',
-    stock: 'Any Status',
-    search: '',
-  });
 
-  // Filter offerings based on search and filters
-  const filteredOfferings = useMemo(() => {
-    return mockOfferings.filter((offering) => {
-      // Search filter
-      const matchesSearch =
-        searchQuery === '' ||
-        offering.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        offering.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        offering.category.toLowerCase().includes(searchQuery.toLowerCase());
+  // Initial load: fetch backend paginated products
+  useEffect(() => {
+    dispatch(fetchBackendOfferings({ page: 1, size: pageSize }));
+  }, [dispatch, pageSize]);
 
-      // Category filter
-      const matchesCategory =
-        filters.category === 'All' || offering.category === filters.category;
+  // Handle category hierarchy selection changes across the two partitions
+  useEffect(() => {
+    const {
+      categoryType,
+      selectedMainCategory,
+      selectedSubOrProductItem,
+      mainCategories,
+    } = categories;
 
-      // Type filter
-      const matchesType =
-        filters.type === 'Any' || offering.type === filters.type;
+    if (categoryType === 'all') {
+      // Handled by fetchBackendOfferings
+      return;
+    }
 
-      // Status filter
-      const matchesStatus = offering.status === filters.status;
+    // If a specific subcategory or product is selected in partition 2
+    if (selectedSubOrProductItem) {
+      if (selectedSubOrProductItem.type === 'product') {
+        dispatch(
+          setHierarchyOfferings({
+            products: [selectedSubOrProductItem.data],
+            parentName: selectedSubOrProductItem.name,
+          })
+        );
+      } else if (selectedSubOrProductItem.type === 'subcategory') {
+        const subData = selectedSubOrProductItem.data;
+        const subProds = subData?.products || [];
+        dispatch(
+          setHierarchyOfferings({
+            products: subProds,
+            parentName: selectedSubOrProductItem.name,
+          })
+        );
+      }
+      return;
+    }
 
-      // Vendor filter
-      const matchesVendor =
-        filters.vendor === 'All' || offering.vendor === filters.vendor;
+    // If a Main Category is selected (and partition 2 is "All")
+    if (selectedMainCategory) {
+      const parentName =
+        (selectedMainCategory as any).primaryCategoryName ||
+        (selectedMainCategory as any).secondaryCategoryName ||
+        '';
 
-      // Stock filter
-      const matchesStock =
-        filters.stock === 'Any Status' || offering.stockLevel === filters.stock;
+      const directProds = selectedMainCategory.products || [];
+      const childSubs = selectedMainCategory.subCategory || [];
 
-      return (
-        matchesSearch &&
-        matchesCategory &&
-        matchesType &&
-        matchesStatus &&
-        matchesVendor &&
-        matchesStock
+      const allProds: Product[] = [...directProds];
+      childSubs.forEach((sub: any) => {
+        if (sub.products) allProds.push(...sub.products);
+      });
+
+      dispatch(
+        setHierarchyOfferings({
+          products: allProds,
+          parentName,
+        })
       );
-    });
-  }, [searchQuery, filters]);
+      return;
+    }
 
-  // Pagination - use mock total of 128 items
-  const totalPages = Math.ceil(TOTAL_ITEMS / ITEMS_PER_PAGE);
-  const paginatedOfferings = filteredOfferings;
+    // If Category Type is set (primary or secondary) but no specific Main Category chosen
+    if (mainCategories.length > 0) {
+      const allProds: Product[] = [];
+      mainCategories.forEach((cat) => {
+        if (cat.products) allProds.push(...cat.products);
+        if (cat.subCategory) {
+          cat.subCategory.forEach((sub) => {
+            if (sub.products) allProds.push(...sub.products);
+          });
+        }
+      });
+      dispatch(
+        setHierarchyOfferings({
+          products: allProds,
+          parentName: categoryType === 'primary' ? 'Primary Category' : 'Secondary Category',
+        })
+      );
+    }
+  }, [categories, dispatch]);
 
-  // Reset to page 1 when filters change
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  };
-
-  const handleClearAll = () => {
-    setFilters({
-      category: 'All',
-      type: 'Any',
-      status: 'Active',
-      vendor: 'All',
-      stock: 'Any Status',
-      search: '',
-    });
-    setCurrentPage(1);
+  const handlePageChange = (newPage: number) => {
+    dispatch(setCurrentPage(newPage));
+    if (categories.categoryType === 'all') {
+      dispatch(fetchBackendOfferings({ page: newPage, size: pageSize }));
+    }
   };
 
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
-    setCurrentPage(1);
+    dispatch(setSearch(query));
   };
+
+  // Filter offerings matching active filters
+  const displayOfferings = offerings.filter((offering) => {
+    if (filters.offeringCategory !== 'All' && offering.category !== filters.offeringCategory) {
+      return false;
+    }
+    if (filters.type !== 'All' && offering.type !== filters.type) {
+      return false;
+    }
+    if (filters.status !== 'All' && offering.status !== filters.status) {
+      return false;
+    }
+    if (filters.vendor !== 'All' && offering.vendor !== filters.vendor) {
+      return false;
+    }
+    if (filters.stock !== 'Any Status' && offering.stockLevel !== filters.stock) {
+      return false;
+    }
+    if (
+      searchQuery.trim() &&
+      !offering.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !offering.sku.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       <TopHeader searchQuery={searchQuery} onSearchChange={handleSearchChange} />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16">
         <div className="p-6">
-          {/* Page Header */}
           <div className="mb-6">
             <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
               MASTER CATALOG
             </div>
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-3xl font-bold text-gray-900">All Offerings</h1>
-              <div className="flex items-center gap-2">
-                {/* View Toggle */}
-                <div className="flex items-center border border-gray-300 rounded overflow-hidden">
-                  <button className="p-2 bg-gray-100 border-r border-gray-300 hover:bg-gray-200 transition-colors">
-                    <svg
-                      className="h-4 w-4 text-gray-700"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                      />
-                    </svg>
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 transition-colors">
-                    <svg
-                      className="h-4 w-4 text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                      />
-                    </svg>
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 transition-colors">
-                    <svg
-                      className="h-4 w-4 text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Export Button */}
-                <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Export
-                </button>
-
-                {/* Import Button */}
-                <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Import
-                </button>
-              </div>
             </div>
           </div>
 
-          {/* Filters */}
-          <OfferingFilters
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onClearAll={handleClearAll}
-          />
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
+            <OfferingFilters />
 
-          {/* Table */}
-          <div className="mt-6">
-            <OfferingTable offerings={paginatedOfferings} />
-          </div>
+            {isLoading ? (
+              <div className="p-12 text-center text-gray-500 text-sm">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2"></div>
+                <div>Loading offerings...</div>
+              </div>
+            ) : (
+              <OfferingTable offerings={displayOfferings} />
+            )}
 
-          {/* Pagination */}
-          {filteredOfferings.length > 0 && (
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={TOTAL_ITEMS}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
+              totalItems={totalElements}
+              itemsPerPage={pageSize}
+              onPageChange={handlePageChange}
             />
-          )}
-
-          {/* Catalog Health Banner */}
-          <CatalogHealthBanner />
-
-          {/* View Reports Link */}
-          <div className="mt-6 mb-8">
-            <button className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors uppercase tracking-wide">
-              VIEW REPORTS
-            </button>
           </div>
         </div>
       </main>
     </div>
+  );
+}
+
+export default function OfferingsPage() {
+  return (
+    <StoreProvider>
+      <OfferingsContent />
+    </StoreProvider>
   );
 }

@@ -72,6 +72,12 @@ export default function OfferingTable({ offerings }: OfferingTableProps) {
                 scope="col"
                 className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
               >
+                Vendor
+              </th>
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+              >
                 Updated
               </th>
             </tr>
