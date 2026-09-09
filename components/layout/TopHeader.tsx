@@ -1,11 +1,19 @@
 'use client';
 
+import { useState } from 'react';
+
 interface TopHeaderProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  onSearch: (query: string) => void;
 }
 
-export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProps) {
+export default function TopHeader({ onSearch }: TopHeaderProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    onSearch(query);
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
       <div className="h-full px-6 flex items-center justify-between gap-6">
@@ -35,7 +43,7 @@ export default function TopHeader({ searchQuery, onSearchChange }: TopHeaderProp
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
               placeholder="Search Master Catalog..."
             />

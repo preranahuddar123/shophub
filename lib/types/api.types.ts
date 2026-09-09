@@ -1,12 +1,4 @@
 // API Response Types for Category & Product Endpoints
-import {
-  PrimaryCatResData,
-  SecondaryCatResData,
-  ProdDataResDTO,
-  PageResponse,
-  ElasticsearchSearchRequest,
-  ElasticsearchSearchResponse,
-} from './dto.types';
 
 export * from './dto.types';
 

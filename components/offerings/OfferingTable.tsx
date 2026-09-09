@@ -1,11 +1,15 @@
-import { Offering } from '@/lib/types';
+'use client';
+
+import React from 'react';
+import { Offering } from '@/types/offerings/offering.types';
 import OfferingRow from './OfferingRow';
 
 interface OfferingTableProps {
   offerings: Offering[];
+  isLoading?: boolean;
 }
 
-export default function OfferingTable({ offerings }: OfferingTableProps) {
+export default function OfferingTable({ offerings, isLoading = false }: OfferingTableProps) {
   if (offerings.length === 0) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
@@ -15,7 +19,12 @@ export default function OfferingTable({ offerings }: OfferingTableProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-black"></div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

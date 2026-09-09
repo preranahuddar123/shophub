@@ -1,26 +1,9 @@
-export type OfferingType = 'Product' | 'Service';
-export type OfferingStatus = 'Active' | 'Inactive' | 'Draft';
-export type StockLevel = 'In Stock' | 'Low Stock' | 'Pre-order' | 'Unlimited';
-export type CategoryType = 'all' | 'primary' | 'secondary';
+export * from '@/types/offerings/offering.types';
+export * from '@/types/api/request.types';
+export * from '@/types/api/response.types';
+export * from '@/types/api/pagination.types';
 
-export interface Offering {
-  id: string;
-  name: string;
-  sku: string;
-  category: string;
-  parentCategoryName?: string; // Primary or Secondary category name
-  subcategory: string;
-  type: OfferingType;
-  price: number;
-  cost: number;
-  margin: number;
-  stock: number;
-  stockLevel: StockLevel;
-  status: OfferingStatus;
-  vendor: string;
-  updated: string;
-  image: string;
-}
+export type CategoryType = 'all' | 'primary' | 'secondary';
 
 export interface FilterState {
   category: CategoryType;
