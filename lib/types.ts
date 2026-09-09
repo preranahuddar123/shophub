@@ -25,6 +25,8 @@ export type {
   SearchMetadata,
 } from './types/api/response.types';
 
+export type Offering = import('./types/offerings/offering.types').OfferingResponse;
+
 // Offering Types
 export {
   getOfferingTypeBadgeClass,

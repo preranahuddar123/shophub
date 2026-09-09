@@ -1,3 +1,4 @@
+import apiClient from './axios-instance';
 import {
   PrimaryCategory,
   SecondaryCategory,
@@ -83,18 +84,37 @@ export const DUMMY_SECONDARY_CATEGORIES: SecondaryCategory[] = [
 ];
 
 /**
- * Fetch all primary categories - dummy data for UI testing
+ * Fetch all primary categories
+ * GET /api/v1/categories/getAllCategories
  */
 export const getAllPrimaryCategories = async (): Promise<PrimaryCategory[]> => {
+  try {
+    const response = await apiClient.get<PrimaryCategory[]>('/categories/getAllCategories');
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn('[category.service] getAllPrimaryCategories failed, fallback to mock:', error.message);
+  }
   return DUMMY_PRIMARY_CATEGORIES;
 };
 
 /**
  * Fetch one primary category by ID
+ * GET /api/v1/categories/getCategory/{primaryCategoryId}
  */
 export const getPrimaryCategoryById = async (
   primaryCategoryId: string | number
 ): Promise<PrimaryCategory | null> => {
+  try {
+    const response = await apiClient.get<PrimaryCategory>(`/categories/getCategory/${primaryCategoryId}`);
+    if (response.data) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn(`[category.service] getCategory(${primaryCategoryId}) failed, fallback to mock:`, error.message);
+  }
+
   const found = DUMMY_PRIMARY_CATEGORIES.find(
     (c) => String(c.primaryCategoryId) === String(primaryCategoryId)
   );
@@ -102,18 +122,42 @@ export const getPrimaryCategoryById = async (
 };
 
 /**
- * Fetch all secondary categories - dummy data for UI testing
+ * Fetch all secondary categories
+ * GET /api/v1/secondary-categories/getAllCategories
  */
 export const getAllSecondaryCategories = async (): Promise<SecondaryCategory[]> => {
+  try {
+    const response = await apiClient.get<SecondaryCategory[]>('/secondary-categories/getAllCategories');
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn('[category.service] getAllSecondaryCategories failed, fallback to mock:', error.message);
+  }
   return DUMMY_SECONDARY_CATEGORIES;
 };
 
 /**
  * Fetch secondary categories by primary category ID
+ * GET /api/v1/secondary-categories/getCategoriesByPrimary/{primaryCategoryId}
  */
 export const getCategoriesByPrimary = async (
   primaryCategoryId: string | number
 ): Promise<SecondaryCategory[]> => {
+  try {
+    const response = await apiClient.get<SecondaryCategory[]>(
+      `/secondary-categories/getCategoriesByPrimary/${primaryCategoryId}`
+    );
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn(
+      `[category.service] getCategoriesByPrimary(${primaryCategoryId}) failed, fallback to mock:`,
+      error.message
+    );
+  }
+
   const primary = DUMMY_PRIMARY_CATEGORIES.find(
     (c) => String(c.primaryCategoryId) === String(primaryCategoryId)
   );
@@ -122,10 +166,25 @@ export const getCategoriesByPrimary = async (
 
 /**
  * Fetch one secondary category by ID
+ * GET /api/v1/secondary-categories/getCategory/{secondaryCategoryId}
  */
 export const getSecondaryCategoryById = async (
   secondaryCategoryId: string | number
 ): Promise<SecondaryCategory | null> => {
+  try {
+    const response = await apiClient.get<SecondaryCategory>(
+      `/secondary-categories/getCategory/${secondaryCategoryId}`
+    );
+    if (response.data) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn(
+      `[category.service] getSecondaryCategoryById(${secondaryCategoryId}) failed, fallback to mock:`,
+      error.message
+    );
+  }
+
   const found = DUMMY_SECONDARY_CATEGORIES.find(
     (c) => String(c.secondaryCategoryId) === String(secondaryCategoryId)
   );

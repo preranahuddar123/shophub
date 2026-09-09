@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+import apiClient from './axios-instance';
 import {
   ProdDataResDTO,
   PageResponse,
@@ -211,25 +211,29 @@ export const DUMMY_PRODUCTS: ProdDataResDTO[] = [
 ];
 
 /**
- * Fetch all products with pagination - uses standalone dummy data for UI testing
-=======
-import apiClient from './axios-instance';
-import { ApiError } from '../types/api.types';
-import { OfferingResponseDto } from '../types/dto.types';
-
-/**
- * Fetch all products with backend pagination
+ * Fetch all products with pagination
  * GET /api/v1/products/getAllProducts?page={page}&size={size}&sort={sort}
- * 
- * @deprecated Use Elasticsearch service instead (lib/api/elasticsearch.service.ts)
->>>>>>> origin/feature/offerings-ui
  */
 export const getAllProducts = async (
   page = 0,
   size = 10,
-<<<<<<< HEAD
-  _sort = 'prodId,asc'
+  sort = 'prodId,asc'
 ): Promise<PageResponse<ProdDataResDTO>> => {
+  try {
+    const response = await apiClient.get<any>('/products/getAllProducts', {
+      params: {
+        page,
+        size,
+        sort,
+      },
+    });
+    if (response.data && response.data.content) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn('[product.service] getAllProducts fallback to mock:', error.message);
+  }
+
   const start = page * size;
   const paginatedItems = DUMMY_PRODUCTS.slice(start, start + size);
 
@@ -242,16 +246,6 @@ export const getAllProducts = async (
         empty: false,
         sorted: true,
         unsorted: false,
-=======
-  sort = 'prodId,asc'
-): Promise<any> => {
-  try {
-    const response = await apiClient.get<any>('/products/getAllProducts', {
-      params: {
-        page,
-        size,
-        sort,
->>>>>>> origin/feature/offerings-ui
       },
       offset: start,
       paged: true,
@@ -269,10 +263,20 @@ export const getAllProducts = async (
 };
 
 /**
-<<<<<<< HEAD
- * Fetch one product by ID - uses standalone dummy data
+ * Fetch one product by ID
+ * Calls GET /api/v1/products/getProduct/{prodId}
+ * Falls back to dummy data if backend is offline
  */
 export const getProductById = async (prodId: number | string): Promise<ProdDataResDTO> => {
+  try {
+    const response = await apiClient.get<ProdDataResDTO>(`/products/getProduct/${prodId}`);
+    if (response.data) {
+      return response.data;
+    }
+  } catch (error: any) {
+    console.warn(`[product.service] getProductById(${prodId}) failed, falling back to mock:`, error.message);
+  }
+
   const product =
     DUMMY_PRODUCTS.find(
       (p) => String(p.prodId) === String(prodId) || p.sku_id === String(prodId)
@@ -300,7 +304,7 @@ export const searchProductsWithElasticsearch = async (
         relation: 'eq',
       },
       max_score: 1.0,
-      hits: pageData.content.map((prod) => ({
+      hits: pageData.content.map((prod: any) => ({
         _index: 'products',
         _id: String(prod.prodId),
         _score: 1.0,
@@ -309,24 +313,3 @@ export const searchProductsWithElasticsearch = async (
     },
   };
 };
-=======
- * Fetch one product by ID
- * GET /api/v1/products/getProduct/{prodId}
- * 
- * @deprecated Use Elasticsearch service instead (lib/api/elasticsearch.service.ts)
- */
-export const getProductById = async (prodId: number | string): Promise<OfferingResponseDto> => {
-  try {
-    const response = await apiClient.get<OfferingResponseDto>(`/products/getProduct/${prodId}`);
-    return response.data;
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to fetch product details',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
-};
-
->>>>>>> origin/feature/offerings-ui

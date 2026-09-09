@@ -193,3 +193,114 @@ export interface SecondaryCategoryDto {
   products?: CategoryProductDto[];
   subCategory?: any[];
 }
+
+export interface ProdDataResDTO {
+  prodId: number | string;
+  offering_name: string;
+  offering_type: string;
+  sku_id: string;
+  category?: string;
+  brand?: string;
+  tags?: string[];
+  short_desc?: string;
+  long_desc?: string;
+  featured_offer?: boolean;
+  pricing?: {
+    selling_price: number;
+    cost_price?: number;
+    cost?: number;
+    discount?: number;
+    gst_rate?: string;
+    units?: string;
+    margin_percentage?: number;
+    desc?: string;
+  };
+  inventory?: {
+    sku_Id?: string;
+    barcode?: string;
+    current_stock: number;
+    minimum_stock_level: number;
+    reorder_quantity?: number;
+    sourcingLogistics?: {
+      preferred_vendor?: string;
+      lead_time?: number;
+    };
+  };
+  internal?: {
+    visibility_status?: {
+      publishing_status: string;
+      visibility?: boolean;
+    };
+    audit_trail_notes?: {
+      desc?: string;
+    };
+  };
+  media?: {
+    primary_image?: string;
+    gallery_images?: string[];
+    video_link?: string;
+    image_360?: string;
+    product_brochure?: string;
+    upload_draw?: string;
+  };
+  specifications?: {
+    physical_dimensions?: {
+      length?: number;
+      width?: number;
+      height?: number;
+      weight?: number;
+    };
+    material_finish?: {
+      primary_material?: string;
+      secondary_material?: string;
+      finish_type?: string;
+    };
+    technical_properties?: {
+      assembly_required?: boolean;
+      load_capacity?: string;
+      desc?: string;
+    };
+    additional_attributes?: Array<{
+      attribute_name: string;
+      value: string;
+    }>;
+  };
+  [key: string]: any;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  pageable?: any;
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}
+
+export interface ElasticsearchSearchRequest {
+  from?: number;
+  size?: number;
+  [key: string]: any;
+}
+
+export interface ElasticsearchSearchResponse<T> {
+  took: number;
+  timed_out: boolean;
+  hits: {
+    total: {
+      value: number;
+      relation: string;
+    };
+    max_score: number;
+    hits: Array<{
+      _index: string;
+      _id: string;
+      _score: number;
+      _source: T;
+    }>;
+  };
+}
