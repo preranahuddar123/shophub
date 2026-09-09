@@ -11,10 +11,6 @@ interface PaginationProps {
   isLoading?: boolean;
 }
 
-/**
- * Pure presentation component for backend pagination controls.
- * Displays backend-driven page numbers, item count, and triggers onPageChange.
- */
 export default function Pagination({
   currentPage,
   totalPages,
@@ -33,7 +29,7 @@ export default function Pagination({
   const canGoPrevious = currentPage > 1 && !isLoading;
   const canGoNext = currentPage < totalPages && !isLoading;
 
-  // Generate page numbers with ellipsis (preserves original UI design)
+  // Generate page numbers with ellipsis
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
 
@@ -67,27 +63,27 @@ export default function Pagination({
   };
 
   return (
-    <div className="bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div className="bg-white border-t border-gray-200 px-6 py-3.5 flex items-center justify-between">
       {/* Results Info */}
-      <div className="text-sm text-gray-600">
-        Showing <span className="font-medium text-gray-900">{startItem}-{endItem}</span> of{' '}
-        <span className="font-medium text-gray-900">{totalItems}</span> offerings
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-semibold text-gray-900">{startItem}-{endItem}</span> of{' '}
+        <span className="font-semibold text-gray-900">{totalItems}</span> offerings
       </div>
 
       {/* Pagination Controls */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         {/* Previous Button */}
         <button
           onClick={() => canGoPrevious && onPageChange(currentPage - 1)}
           disabled={!canGoPrevious}
-          className={`p-2 rounded transition-colors ${
+          className={`p-1.5 rounded-lg border transition-colors ${
             canGoPrevious
-              ? 'text-gray-700 hover:bg-gray-100 cursor-pointer'
-              : 'text-gray-300 cursor-not-allowed'
+              ? 'border-gray-300 text-gray-700 hover:bg-gray-100 cursor-pointer shadow-xs'
+              : 'border-gray-200 text-gray-300 cursor-not-allowed'
           }`}
           title="Previous Page"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -96,7 +92,7 @@ export default function Pagination({
         {getPageNumbers().map((page, index) => {
           if (page === '...') {
             return (
-              <span key={`ellipsis-${index}`} className="px-3 py-2 text-gray-500 select-none">
+              <span key={`ellipsis-${index}`} className="px-2 text-gray-400 select-none text-xs">
                 …
               </span>
             );
@@ -110,10 +106,10 @@ export default function Pagination({
               key={pageNum}
               onClick={() => !isActive && !isLoading && onPageChange(pageNum)}
               disabled={isLoading || isActive}
-              className={`min-w-[2.5rem] h-10 px-3 rounded text-sm font-medium transition-colors ${
+              className={`min-w-[2rem] h-8 px-2.5 rounded-lg text-xs font-semibold transition-colors ${
                 isActive
-                  ? 'bg-black text-white cursor-default'
-                  : 'text-gray-700 hover:bg-gray-100 cursor-pointer'
+                  ? 'bg-black text-white cursor-default shadow-xs'
+                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer shadow-xs'
               }`}
             >
               {pageNum}
@@ -125,14 +121,14 @@ export default function Pagination({
         <button
           onClick={() => canGoNext && onPageChange(currentPage + 1)}
           disabled={!canGoNext}
-          className={`p-2 rounded transition-colors ${
+          className={`p-1.5 rounded-lg border transition-colors ${
             canGoNext
-              ? 'text-gray-700 hover:bg-gray-100 cursor-pointer'
-              : 'text-gray-300 cursor-not-allowed'
+              ? 'border-gray-300 text-gray-700 hover:bg-gray-100 cursor-pointer shadow-xs'
+              : 'border-gray-200 text-gray-300 cursor-not-allowed'
           }`}
           title="Next Page"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>

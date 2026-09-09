@@ -1,23 +1,30 @@
 'use client';
 
-import React from 'react';
-import { FilterRequest } from '@/lib/types/api/request.types';
-import { FilterOptionsResponse } from '@/lib/types/api/response.types';
+import React, { useMemo } from 'react';
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
+import {
+  setCategoryType,
+  selectMainCategoryThunk,
+  clearMainCategorySelection,
+  selectSubOrProduct,
+  setFilter,
+  clearStandardFilters,
+  clearAllFilters,
+  fetchMainCategories,
+  selectCategoryType,
+  selectMainCategories,
+  selectSelectedMainCategoryId,
+  selectSubOrProductItems,
+  selectSelectedSubOrProductId,
+  selectFilters,
+  selectCategoriesLoading,
+  selectDerivedOfferings,
+} from '@/lib/store/slices/categoriesSlice';
 
-interface OfferingFiltersProps {
-  filterOptions: FilterOptionsResponse | null;
-  filters: FilterRequest;
-  onFilterChange: (filters: Partial<FilterRequest>) => void;
-  onClearFilters: () => void;
-  onClearAll: () => void;
-  isLoading?: boolean;
-}
-
-// Fallback options matching backend GlobalEnums if backend aggregation response is pending
-const FALLBACK_CATEGORIES = [
+const PRODUCT_CATEGORIES = [
+  'LIGHTING',
   'FURNITURE',
   'DECOR',
-  'LIGHTING',
   'BEDDING',
   'BATH',
   'KITCHEN',
@@ -28,182 +35,259 @@ const FALLBACK_CATEGORIES = [
   'OTHER',
 ];
 
-const FALLBACK_TYPES = ['PRODUCT', 'SERVICE', 'BUNDLE'];
+const OFFERING_TYPES = ['PRODUCT', 'SERVICE', 'BUNDLE'];
 
-const FALLBACK_STATUSES = [
-  'PUBLISHED',
-  'DRAFT',
-  'IN_REVIEW',
-  'APPROVED',
-  'SCHEDULED',
-  'ARCHIVED',
-  'DISCONTINUED',
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'PUBLISHED', label: 'Active' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'IN_REVIEW', label: 'In Review' },
+  { value: 'APPROVED', label: 'Approved' },
 ];
 
-const FALLBACK_VENDORS = [
-  'VENDOR_A',
-  'VENDOR_B',
-  'VENDOR_C',
-  'IN_HOUSE',
-  'THIRD_PARTY',
-  'IMPORTED',
+const STOCK_OPTIONS = [
+  { value: 'all', label: 'Any Status' },
+  { value: 'In Stock', label: 'In Stock' },
+  { value: 'Low Stock', label: 'Low Stock' },
+  { value: 'Out of Stock', label: 'Out of Stock' },
 ];
 
-const FALLBACK_STOCKS = [
-  'In Stock',
-  'Low Stock',
-  'Out of Stock',
-  'Pre-order',
-  'Unlimited',
-];
+export default function OfferingFilters() {
+  const dispatch = useAppDispatch();
 
-/**
- * OfferingFilters Component
- * Dynamic filter bar driven purely by backend filter-options
- * Preserves the exact original UI design
- */
-export default function OfferingFilters({
-  filterOptions,
-  filters,
-  onFilterChange,
-  onClearFilters,
-  onClearAll,
-  isLoading = false,
-}: OfferingFiltersProps) {
-  const categoryOptions =
-    filterOptions?.categories && filterOptions.categories.length > 0
-      ? filterOptions.categories
-      : FALLBACK_CATEGORIES;
+  // Redux state
+  const categoryType = useAppSelector(selectCategoryType);
+  const mainCategories = useAppSelector(selectMainCategories);
+  const selectedMainCategoryId = useAppSelector(selectSelectedMainCategoryId);
+  const subOrProductItems = useAppSelector(selectSubOrProductItems);
+  const selectedSubOrProductId = useAppSelector(selectSelectedSubOrProductId);
+  const filters = useAppSelector(selectFilters);
+  const isLoading = useAppSelector(selectCategoriesLoading);
+  const derivedOfferings = useAppSelector(selectDerivedOfferings);
 
-  const typeOptions =
-    filterOptions?.types && filterOptions.types.length > 0
-      ? filterOptions.types
-      : FALLBACK_TYPES;
+  // Dynamic vendor options from offering names
+  const vendorOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const offering of derivedOfferings) {
+      if (offering.vendor) {
+        set.add(offering.vendor);
+      } else if (offering.offering_name) {
+        set.add(offering.offering_name);
+      }
+    }
+    return Array.from(set).sort();
+  }, [derivedOfferings]);
 
-  const statusOptions =
-    filterOptions?.statuses && filterOptions.statuses.length > 0
-      ? filterOptions.statuses
-      : FALLBACK_STATUSES;
-
-  const vendorOptions =
-    filterOptions?.vendors && filterOptions.vendors.length > 0
-      ? filterOptions.vendors
-      : FALLBACK_VENDORS;
-
-  const stockOptions =
-    filterOptions?.stocks && filterOptions.stocks.length > 0
-      ? filterOptions.stocks
-      : FALLBACK_STOCKS;
-
-  const selectedCategory = filters.categories?.[0] || 'all';
-  const selectedType = filters.types?.[0] || 'all';
-  const selectedStatus = filters.statuses?.[0] || 'all';
-  const selectedVendor = filters.vendors?.[0] || 'all';
-  const selectedStock = filters.stocks?.[0] || 'all';
-
-  const handleCategoryChange = (val: string) => {
-    onFilterChange({
-      categories: val === 'all' ? [] : [val],
-    });
+  // Handlers
+  const handleCategoryTypeChange = (val: 'all' | 'primary' | 'secondary') => {
+    dispatch(setCategoryType(val));
+    if (val === 'primary') {
+      // Calls /api/v1/categories/getAllCategories
+      dispatch(fetchMainCategories('primary'));
+    } else if (val === 'secondary') {
+      // Calls /api/v1/secondary-categories/getAllCategories
+      dispatch(fetchMainCategories('secondary'));
+    } else {
+      // "all all should be seen"
+      dispatch(fetchMainCategories('primary'));
+      dispatch(fetchMainCategories('secondary'));
+    }
   };
 
-  const handleTypeChange = (val: string) => {
-    onFilterChange({
-      types: val === 'all' ? [] : [val],
-    });
+  const handleMainCategoryChange = (val: string) => {
+    if (val === 'all') {
+      dispatch(clearMainCategorySelection());
+    } else {
+      dispatch(
+        selectMainCategoryThunk({
+          categoryId: val,
+          categoryType: categoryType === 'secondary' ? 'secondary' : 'primary',
+        })
+      );
+    }
   };
 
-  const handleStatusChange = (val: string) => {
-    onFilterChange({
-      statuses: val === 'all' ? [] : [val],
-    });
+  const handleSubOrProductChange = (val: string) => {
+    dispatch(selectSubOrProduct(val === 'all' ? null : val));
   };
 
-  const handleVendorChange = (val: string) => {
-    onFilterChange({
-      vendors: val === 'all' ? [] : [val],
-    });
-  };
-
-  const handleStockChange = (val: string) => {
-    onFilterChange({
-      stocks: val === 'all' ? [] : [val],
-    });
-  };
+  // Determine label for subOrProduct partition
+  const isSubcategoryType = subOrProductItems.some((i) => i.type === 'subcategory');
+  const subOrProductLabel = isSubcategoryType ? 'SUB CATEGORY' : 'PRODUCT';
 
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-3">
-      <div className="flex items-center gap-4 flex-wrap">
-        {/* 1. CATEGORY Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 uppercase">
-            Category:
-          </label>
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* ========================================================================= */}
+        {/* 1. CATEGORY TYPE PILL */}
+        {/* ========================================================================= */}
+        <div className="relative inline-flex items-center border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-xs hover:border-gray-400 transition-colors">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1.5 select-none">
+            CATEGORY:
+          </span>
           <select
-            value={selectedCategory}
-            onChange={(e) => handleCategoryChange(e.target.value)}
+            value={categoryType}
+            onChange={(e) =>
+              handleCategoryTypeChange(e.target.value as 'all' | 'primary' | 'secondary')
+            }
             disabled={isLoading}
-            className="pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer"
           >
             <option value="all">All</option>
-            {categoryOptions.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
+            <option value="primary">Primary Category</option>
+            <option value="secondary">Secondary Category</option>
           </select>
+          <svg
+            className="w-3.5 h-3.5 text-gray-500 pointer-events-none -ml-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
 
-        {/* 2. TYPE Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 uppercase">
-            Type:
-          </label>
+        {/* ========================================================================= */}
+        {/* 2. DYNAMIC MAIN CATEGORY PILL (Opens when Category Type is Primary/Secondary) */}
+        {/* ========================================================================= */}
+        {categoryType !== 'all' && mainCategories.length > 0 && (
+          <div className="relative inline-flex items-center border border-blue-300 rounded-lg px-3 py-1.5 bg-blue-50/40 shadow-xs hover:border-blue-400 transition-colors animate-fadeIn">
+            <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider mr-1.5 select-none">
+              MAIN CATEGORY:
+            </span>
+            <select
+              value={selectedMainCategoryId || 'all'}
+              onChange={(e) => handleMainCategoryChange(e.target.value)}
+              disabled={isLoading}
+              className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer max-w-[200px] truncate"
+            >
+              <option value="all">
+                {categoryType === 'primary' ? 'All Primary' : 'All Secondary'}
+              </option>
+              {mainCategories.map((cat: any) => {
+                const id = String(cat.primaryCategoryId ?? cat.secondaryCategoryId ?? '');
+                const name = cat.primaryCategoryName ?? cat.secondaryCategoryName ?? `Category ${id}`;
+                return (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                );
+              })}
+            </select>
+            <svg
+              className="w-3.5 h-3.5 text-blue-600 pointer-events-none -ml-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 3. DYNAMIC SUB CATEGORY / PRODUCT PILL (Opens depending on child data) */}
+        {/* ========================================================================= */}
+        {categoryType !== 'all' && selectedMainCategoryId && subOrProductItems.length > 0 && (
+          <div className="relative inline-flex items-center border border-purple-300 rounded-lg px-3 py-1.5 bg-purple-50/40 shadow-xs hover:border-purple-400 transition-colors animate-fadeIn">
+            <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider mr-1.5 select-none">
+              {subOrProductLabel}:
+            </span>
+            <select
+              value={selectedSubOrProductId || 'all'}
+              onChange={(e) => handleSubOrProductChange(e.target.value)}
+              disabled={isLoading}
+              className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer max-w-[220px] truncate"
+            >
+              <option value="all">All</option>
+              {subOrProductItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <svg
+              className="w-3.5 h-3.5 text-purple-600 pointer-events-none -ml-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 4. TYPE PILL */}
+        {/* ========================================================================= */}
+        <div className="relative inline-flex items-center border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-xs hover:border-gray-400 transition-colors">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1.5 select-none">
+            TYPE:
+          </span>
           <select
-            value={selectedType}
-            onChange={(e) => handleTypeChange(e.target.value)}
+            value={filters.type}
+            onChange={(e) => dispatch(setFilter({ key: 'type', value: e.target.value }))}
             disabled={isLoading}
-            className="pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer capitalize"
           >
-            <option value="all">All</option>
-            {typeOptions.map((type) => (
+            <option value="all">Any</option>
+            {OFFERING_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type}
+                {type.charAt(0) + type.slice(1).toLowerCase()}
               </option>
             ))}
           </select>
-        </div>
-
-        {/* 3. STATUS Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 uppercase">
-            Status:
-          </label>
-          <select
-            value={selectedStatus}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            disabled={isLoading}
-            className="pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+          <svg
+            className="w-3.5 h-3.5 text-gray-500 pointer-events-none -ml-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <option value="all">All</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 5. STATUS PILL */}
+        {/* ========================================================================= */}
+        <div className="relative inline-flex items-center border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-xs hover:border-gray-400 transition-colors">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1.5 select-none">
+            STATUS:
+          </span>
+          <select
+            value={filters.status}
+            onChange={(e) => dispatch(setFilter({ key: 'status', value: e.target.value }))}
+            disabled={isLoading}
+            className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
+          <svg
+            className="w-3.5 h-3.5 text-gray-500 pointer-events-none -ml-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
 
-        {/* 4. VENDOR Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 uppercase">
-            Vendor:
-          </label>
+        {/* ========================================================================= */}
+        {/* 6. VENDOR PILL */}
+        {/* ========================================================================= */}
+        <div className="relative inline-flex items-center border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-xs hover:border-gray-400 transition-colors">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1.5 select-none">
+            VENDOR:
+          </span>
           <select
-            value={selectedVendor}
-            onChange={(e) => handleVendorChange(e.target.value)}
+            value={filters.vendor}
+            onChange={(e) => dispatch(setFilter({ key: 'vendor', value: e.target.value }))}
             disabled={isLoading}
-            className="pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer max-w-[160px] truncate"
           >
             <option value="all">All</option>
             {vendorOptions.map((vendor) => (
@@ -212,36 +296,67 @@ export default function OfferingFilters({
               </option>
             ))}
           </select>
+          <svg
+            className="w-3.5 h-3.5 text-gray-500 pointer-events-none -ml-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
 
-        {/* 5. STOCK Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 uppercase">
-            Stock:
-          </label>
+        {/* ========================================================================= */}
+        {/* 7. STOCK PILL */}
+        {/* ========================================================================= */}
+        <div className="relative inline-flex items-center border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-xs hover:border-gray-400 transition-colors">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1.5 select-none">
+            STOCK:
+          </span>
           <select
-            value={selectedStock}
-            onChange={(e) => handleStockChange(e.target.value)}
+            value={filters.stock}
+            onChange={(e) => dispatch(setFilter({ key: 'stock', value: e.target.value }))}
             disabled={isLoading}
-            className="pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="appearance-none bg-transparent pr-4 text-xs font-semibold text-gray-900 focus:outline-none cursor-pointer"
           >
-            <option value="all">All</option>
-            {stockOptions.map((stock) => (
-              <option key={stock} value={stock}>
-                {stock}
+            {STOCK_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
+          <svg
+            className="w-3.5 h-3.5 text-gray-500 pointer-events-none -ml-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
 
-          {/* Clear Filters Button (Dustbin Icon) */}
+        {/* ========================================================================= */}
+        {/* 8. ACTIONS: Clear All & Funnel Filter Icon */}
+        {/* ========================================================================= */}
+        <div className="flex items-center gap-3 ml-auto">
+          {/* Clear All Text Button */}
           <button
-            onClick={onClearFilters}
+            onClick={() => dispatch(clearAllFilters())}
             disabled={isLoading}
-            title="Clear all filters"
-            className="p-1.5 border border-gray-300 rounded hover:bg-red-50 hover:border-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs text-gray-600 hover:text-gray-900 font-semibold transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            Clear All
+          </button>
+
+          {/* Funnel Icon Button */}
+          <button
+            onClick={() => dispatch(clearStandardFilters())}
+            disabled={isLoading}
+            title="Reset attribute filters"
+            className="p-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors shadow-xs disabled:opacity-50"
           >
             <svg
-              className="h-4 w-4 text-red-600"
+              className="h-4 w-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -250,27 +365,11 @@ export default function OfferingFilters({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
               />
             </svg>
           </button>
         </div>
-
-        {/* Clear All Link */}
-        <button
-          onClick={onClearAll}
-          disabled={isLoading}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors ml-auto disabled:opacity-50"
-        >
-          Clear All
-        </button>
-
-        {/* Loading Indicator */}
-        {isLoading && (
-          <span className="text-xs text-blue-600 font-medium animate-pulse">
-            Loading...
-          </span>
-        )}
       </div>
     </div>
   );
