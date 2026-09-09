@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Base API URL
+// Base API URL - defaults to localhost if not set
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8081/api/v1';
 
 // Create axios instance with default config
@@ -10,16 +10,18 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Include credentials in cross-origin requests
+  withCredentials: false, // Disable credentials for now to avoid CORS issues
 });
 
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
     // Add auth token if available
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -43,7 +45,8 @@ apiClient.interceptors.response.use(
       console.error('Network/CORS Error:', error.message);
       if (error.message.includes('CORS') || error.message.includes('cors')) {
         console.error(
-          'CORS Error detected. The backend may not have CORS enabled for this origin.'
+          'CORS Error detected. The backend may not have CORS enabled for this origin. ' +
+          'Make sure your backend has CORS headers configured properly.'
         );
       }
     } else {

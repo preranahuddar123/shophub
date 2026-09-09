@@ -1,2 +1,0 @@
-export * from '@/store/offerings/offeringsSlice';
-export { default } from '@/store/offerings/offeringsSlice';
