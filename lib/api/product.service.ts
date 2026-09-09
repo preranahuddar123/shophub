@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
   ProdDataResDTO,
   PageResponse,
@@ -211,10 +212,22 @@ export const DUMMY_PRODUCTS: ProdDataResDTO[] = [
 
 /**
  * Fetch all products with pagination - uses standalone dummy data for UI testing
+=======
+import apiClient from './axios-instance';
+import { ApiError } from '../types/api.types';
+import { OfferingResponseDto } from '../types/dto.types';
+
+/**
+ * Fetch all products with backend pagination
+ * GET /api/v1/products/getAllProducts?page={page}&size={size}&sort={sort}
+ * 
+ * @deprecated Use Elasticsearch service instead (lib/api/elasticsearch.service.ts)
+>>>>>>> origin/feature/offerings-ui
  */
 export const getAllProducts = async (
   page = 0,
   size = 10,
+<<<<<<< HEAD
   _sort = 'prodId,asc'
 ): Promise<PageResponse<ProdDataResDTO>> => {
   const start = page * size;
@@ -229,6 +242,16 @@ export const getAllProducts = async (
         empty: false,
         sorted: true,
         unsorted: false,
+=======
+  sort = 'prodId,asc'
+): Promise<any> => {
+  try {
+    const response = await apiClient.get<any>('/products/getAllProducts', {
+      params: {
+        page,
+        size,
+        sort,
+>>>>>>> origin/feature/offerings-ui
       },
       offset: start,
       paged: true,
@@ -246,6 +269,7 @@ export const getAllProducts = async (
 };
 
 /**
+<<<<<<< HEAD
  * Fetch one product by ID - uses standalone dummy data
  */
 export const getProductById = async (prodId: number | string): Promise<ProdDataResDTO> => {
@@ -285,3 +309,24 @@ export const searchProductsWithElasticsearch = async (
     },
   };
 };
+=======
+ * Fetch one product by ID
+ * GET /api/v1/products/getProduct/{prodId}
+ * 
+ * @deprecated Use Elasticsearch service instead (lib/api/elasticsearch.service.ts)
+ */
+export const getProductById = async (prodId: number | string): Promise<OfferingResponseDto> => {
+  try {
+    const response = await apiClient.get<OfferingResponseDto>(`/products/getProduct/${prodId}`);
+    return response.data;
+  } catch (error: any) {
+    const apiError: ApiError = {
+      message: error.response?.data?.message || error.message || 'Failed to fetch product details',
+      status: error.response?.status,
+      code: error.response?.data?.code,
+    };
+    throw apiError;
+  }
+};
+
+>>>>>>> origin/feature/offerings-ui

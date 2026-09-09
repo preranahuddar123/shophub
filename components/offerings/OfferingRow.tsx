@@ -1,13 +1,24 @@
 'use client';
 
+<<<<<<< HEAD
 import { useRouter } from 'next/navigation';
 import { Offering } from '@/lib/types';
+=======
+import React from 'react';
+import {
+  Offering,
+  getOfferingTypeBadgeClass,
+  getStatusBadgeClass,
+  getStockDisplayInfo,
+} from '@/types/offerings/offering.types';
+>>>>>>> origin/feature/offerings-ui
 
 interface OfferingRowProps {
   offering: Offering;
 }
 
 export default function OfferingRow({ offering }: OfferingRowProps) {
+<<<<<<< HEAD
   const router = useRouter();
   // Type badge styling
   const typeBadgeClass =
@@ -82,23 +93,36 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       }}
     >
       {/* Offering Name - product.offering_name */}
+=======
+  const typeBadgeClass = getOfferingTypeBadgeClass(offering.type);
+  const statusBadgeClass = getStatusBadgeClass(offering.status);
+  const stockDisplay = getStockDisplayInfo({
+    type: offering.type,
+    stock: offering.stock,
+    stockLevel: offering.stockLevel,
+  });
+
+  return (
+    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+      {/* Offering Name */}
+>>>>>>> origin/feature/offerings-ui
       <td className="px-6 py-4">
         <div className="text-sm font-semibold text-gray-900 group-hover:text-black transition-colors">
           {offering.name}
         </div>
       </td>
 
-      {/* SKU - product.sku_id */}
+      {/* SKU */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-700">{offering.sku}</div>
       </td>
 
-      {/* Category - product.category (e.g. LIGHTING) */}
+      {/* Category */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-900">{offering.category}</div>
       </td>
 
-      {/* Type - product.offering_type */}
+      {/* Type */}
       <td className="px-6 py-4">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeBadgeClass}`}
@@ -107,7 +131,7 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </span>
       </td>
 
-      {/* Price - product.pricing.selling_price */}
+      {/* Price & Cost */}
       <td className="px-6 py-4">
         <div>
           <div className="text-sm font-semibold text-gray-900">
@@ -119,7 +143,7 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </div>
       </td>
 
-      {/* Margin - product.pricing.margin_percentage */}
+      {/* Margin */}
       <td className="px-6 py-4">
         <div className="text-sm font-semibold text-green-600">
           {!isNaN(offering.margin) && offering.margin !== 0
@@ -128,22 +152,26 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </div>
       </td>
 
-      {/* Stock - product.inventory.current_stock */}
+      {/* Stock */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}></span>
+          <span
+            className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}
+          ></span>
           <div>
             <span className={`text-sm font-medium ${stockDisplay.textColor}`}>
               {stockDisplay.text}
             </span>
             {stockDisplay.subtext && (
-              <span className="text-xs text-gray-500 ml-1">{stockDisplay.subtext}</span>
+              <span className="text-xs text-gray-500 ml-1">
+                {stockDisplay.subtext}
+              </span>
             )}
           </div>
         </div>
       </td>
 
-      {/* Status - product.internal.visibility_status.publishing_status */}
+      {/* Status */}
       <td className="px-6 py-4">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${statusBadgeClass}`}
@@ -152,7 +180,7 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </span>
       </td>
 
-      {/* Vendor - product.offering_name */}
+      {/* Vendor */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-700">{offering.vendor}</div>
       </td>

@@ -1,200 +1,192 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import StoreProvider from '@/components/providers/StoreProvider';
+import { useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import OfferingFilters from '@/components/offerings/OfferingFilters';
 import OfferingTable from '@/components/offerings/OfferingTable';
 import Pagination from '@/components/offerings/Pagination';
-import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
-  fetchBackendOfferings,
-  setCurrentPage,
-  setHierarchyOfferings,
-} from '@/lib/store/slices/offeringsSlice';
-import { setSearch } from '@/lib/store/slices/filtersSlice';
-import { Product } from '@/lib/types/api.types';
+  selectOfferings,
+  selectFilterOptions,
+  selectFilters,
+  selectPagination,
+  selectIsLoading,
+  selectError,
+} from '@/store/offerings/offeringsSelectors';
+import {
+  executeSearchThunk,
+  fetchFilterOptionsThunk,
+  handleSearchAction,
+  handleFilterAction,
+  handlePageAction,
+  handleClearAllAction,
+} from '@/store/offerings/offeringsThunks';
+import { clearError } from '@/store/offerings/offeringsSlice';
+import { FilterRequest } from '@/types/api/request.types';
 
-function OfferingsContent() {
+/**
+ * OfferingsPage Component
+ * 
+ * Responsibilities:
+ * - Pure composition / container layer connecting UI to Redux
+ * - Forwards user interactions (search, filter, pagination) to Redux actions/thunks
+ * - Redux/thunk layer constructs and executes backend Elasticsearch requests
+ * - Displays data returned from Elasticsearch backend
+ * 
+ * Zero client-side filtering algorithms or pagination computations.
+ */
+export default function OfferingsPage() {
   const dispatch = useAppDispatch();
-  const { offerings, currentPage, pageSize, totalElements, totalPages, isLoading } =
-    useAppSelector((state) => state.offerings);
-  const categories = useAppSelector((state) => state.categories);
-  const filters = useAppSelector((state) => state.filters);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  // Redux state selectors
+  const offerings = useAppSelector(selectOfferings);
+  const filterOptions = useAppSelector(selectFilterOptions);
+  const filters = useAppSelector(selectFilters);
+  const pagination = useAppSelector(selectPagination);
+  const isLoading = useAppSelector(selectIsLoading);
+  const error = useAppSelector(selectError);
 
-  // Initial load: fetch backend paginated products
+  // Load filter options and initial offerings on component mount
   useEffect(() => {
-    dispatch(fetchBackendOfferings({ page: 1, size: pageSize }));
-  }, [dispatch, pageSize]);
+    dispatch(fetchFilterOptionsThunk());
+    dispatch(executeSearchThunk());
+  }, [dispatch]);
 
-  // Handle category hierarchy selection changes across the two partitions
-  useEffect(() => {
-    const {
-      categoryType,
-      selectedMainCategory,
-      selectedSubOrProductItem,
-      mainCategories,
-    } = categories;
-
-    if (categoryType === 'all') {
-      // Handled by fetchBackendOfferings
-      return;
-    }
-
-    // If a specific subcategory or product is selected in partition 2
-    if (selectedSubOrProductItem) {
-      if (selectedSubOrProductItem.type === 'product') {
-        dispatch(
-          setHierarchyOfferings({
-            products: [selectedSubOrProductItem.data],
-            parentName: selectedSubOrProductItem.name,
-          })
-        );
-      } else if (selectedSubOrProductItem.type === 'subcategory') {
-        const subData = selectedSubOrProductItem.data;
-        const subProds = subData?.products || [];
-        dispatch(
-          setHierarchyOfferings({
-            products: subProds,
-            parentName: selectedSubOrProductItem.name,
-          })
-        );
-      }
-      return;
-    }
-
-    // If a Main Category is selected (and partition 2 is "All")
-    if (selectedMainCategory) {
-      const parentName =
-        (selectedMainCategory as any).primaryCategoryName ||
-        (selectedMainCategory as any).secondaryCategoryName ||
-        '';
-
-      const directProds = selectedMainCategory.products || [];
-      const childSubs = selectedMainCategory.subCategory || [];
-
-      const allProds: Product[] = [...directProds];
-      childSubs.forEach((sub: any) => {
-        if (sub.products) allProds.push(...sub.products);
-      });
-
-      dispatch(
-        setHierarchyOfferings({
-          products: allProds,
-          parentName,
-        })
-      );
-      return;
-    }
-
-    // If Category Type is set (primary or secondary) but no specific Main Category chosen
-    if (mainCategories.length > 0) {
-      const allProds: Product[] = [];
-      mainCategories.forEach((cat) => {
-        if (cat.products) allProds.push(...cat.products);
-        if (cat.subCategory) {
-          cat.subCategory.forEach((sub) => {
-            if (sub.products) allProds.push(...sub.products);
-          });
-        }
-      });
-      dispatch(
-        setHierarchyOfferings({
-          products: allProds,
-          parentName: categoryType === 'primary' ? 'Primary Category' : 'Secondary Category',
-        })
-      );
-    }
-  }, [categories, dispatch]);
-
-  const handlePageChange = (newPage: number) => {
-    dispatch(setCurrentPage(newPage));
-    if (categories.categoryType === 'all') {
-      dispatch(fetchBackendOfferings({ page: newPage, size: pageSize }));
-    }
+  // Interaction handlers - update Redux and trigger backend requests
+  const handleSearch = (query: string) => {
+    dispatch(handleSearchAction(query));
   };
 
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-    dispatch(setSearch(query));
+  const handleFilterChange = (newFilters: Partial<FilterRequest>) => {
+    dispatch(handleFilterAction(newFilters));
   };
 
-  // Filter offerings matching active filters
-  const displayOfferings = offerings.filter((offering) => {
-    if (filters.offeringCategory !== 'All' && offering.category !== filters.offeringCategory) {
-      return false;
-    }
-    if (filters.type !== 'All' && offering.type !== filters.type) {
-      return false;
-    }
-    if (filters.status !== 'All' && offering.status !== filters.status) {
-      return false;
-    }
-    if (filters.vendor !== 'All' && offering.vendor !== filters.vendor) {
-      return false;
-    }
-    if (filters.stock !== 'Any Status' && offering.stockLevel !== filters.stock) {
-      return false;
-    }
-    if (
-      searchQuery.trim() &&
-      !offering.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !offering.sku.toLowerCase().includes(searchQuery.toLowerCase())
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const handleClearFilters = () => {
+    dispatch(
+      handleFilterAction({
+        categories: [],
+        types: [],
+        statuses: [],
+        vendors: [],
+        stocks: [],
+      })
+    );
+  };
+
+  const handleClearAll = () => {
+    dispatch(handleClearAllAction());
+  };
+
+  const handlePageChange = (page: number) => {
+    dispatch(handlePageAction(page));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <TopHeader searchQuery={searchQuery} onSearchChange={handleSearchChange} />
+      <TopHeader onSearch={handleSearch} />
 
+      {/* Main Content Area */}
       <main className="ml-56 pt-16">
         <div className="p-6">
+          {/* Page Header */}
           <div className="mb-6">
             <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
               MASTER CATALOG
             </div>
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">All Offerings</h1>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900">All Offerings</h1>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
-            <OfferingFilters />
+          {/* Dynamic Backend-Driven Filters */}
+          <OfferingFilters
+            filterOptions={filterOptions}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+            onClearAll={handleClearAll}
+            isLoading={isLoading}
+          />
 
-            {isLoading ? (
-              <div className="p-12 text-center text-gray-500 text-sm">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2"></div>
-                <div>Loading offerings...</div>
+          {/* Error State */}
+          {error && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="h-5 w-5 text-red-600 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+                <button
+                  onClick={() => dispatch(clearError())}
+                  className="text-sm text-red-600 hover:text-red-800 font-medium cursor-pointer"
+                >
+                  Dismiss
+                </button>
               </div>
-            ) : (
-              <OfferingTable offerings={displayOfferings} />
-            )}
+            </div>
+          )}
 
+          {/* Loading State */}
+          {isLoading && offerings.length === 0 && (
+            <div className="mt-6 text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-black"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading offerings...</p>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && offerings.length === 0 && !error && (
+            <div className="mt-6 text-center py-12 bg-white rounded-lg border border-gray-200">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                />
+              </svg>
+              <p className="mt-4 text-sm text-gray-600">No offerings found</p>
+            </div>
+          )}
+
+          {/* Presentation Table */}
+          {offerings.length > 0 && (
+            <div className="mt-6">
+              <OfferingTable offerings={offerings} isLoading={isLoading} />
+            </div>
+          )}
+
+          {/* Presentation Pagination */}
+          {offerings.length > 0 && (
             <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalElements}
-              itemsPerPage={pageSize}
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              itemsPerPage={pagination.size}
               onPageChange={handlePageChange}
+              isLoading={isLoading}
             />
-          </div>
+          )}
         </div>
       </main>
     </div>
-  );
-}
-
-export default function OfferingsPage() {
-  return (
-    <StoreProvider>
-      <OfferingsContent />
-    </StoreProvider>
   );
 }
