@@ -1,28 +1,43 @@
 'use client';
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { useRouter } from 'next/navigation';
 import { Offering } from '@/lib/types';
 =======
 import React from 'react';
+=======
+>>>>>>> origin/feature/offerings-ui
 import {
-  Offering,
+  OfferingResponse,
   getOfferingTypeBadgeClass,
   getStatusBadgeClass,
+<<<<<<< HEAD
   getStockDisplayInfo,
 } from '@/types/offerings/offering.types';
 >>>>>>> origin/feature/offerings-ui
+=======
+  getStockDisplay,
+  formatOfferingDate,
+} from '@/lib/types/offerings/offering.types';
+>>>>>>> origin/feature/offerings-ui
 
 interface OfferingRowProps {
-  offering: Offering;
+  offering: OfferingResponse;
 }
 
 export default function OfferingRow({ offering }: OfferingRowProps) {
+<<<<<<< HEAD
 <<<<<<< HEAD
   const router = useRouter();
   // Type badge styling
   const typeBadgeClass =
     offering.type === 'Product'
+=======
+  // Type badge styling
+  const typeBadgeClass =
+    offering.offering_type === 'Product'
+>>>>>>> origin/feature/offerings-ui
       ? 'bg-purple-50 text-purple-700 border border-purple-200'
       : 'bg-gray-100 text-gray-700 border border-gray-200';
 
@@ -35,6 +50,7 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       : 'bg-orange-50 text-orange-600 border border-orange-200';
 
   // Stock level styling
+<<<<<<< HEAD
   const getStockDisplay = () => {
     if (offering.type === 'Service') {
       return {
@@ -101,25 +117,32 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
     stock: offering.stock,
     stockLevel: offering.stockLevel,
   });
+=======
+  const stockDisplay = getStockDisplay(offering);
+>>>>>>> origin/feature/offerings-ui
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
       {/* Offering Name */}
 >>>>>>> origin/feature/offerings-ui
       <td className="px-6 py-4">
+<<<<<<< HEAD
         <div className="text-sm font-semibold text-gray-900 group-hover:text-black transition-colors">
           {offering.name}
         </div>
+=======
+        <div className="text-sm font-medium text-gray-900">{offering.offering_name}</div>
+>>>>>>> origin/feature/offerings-ui
       </td>
 
       {/* SKU */}
       <td className="px-6 py-4">
-        <div className="text-sm text-gray-700">{offering.sku}</div>
+        <div className="text-sm text-gray-700">{offering.sku_id || 'N/A'}</div>
       </td>
 
-      {/* Category */}
+      {/* Category - from product.category */}
       <td className="px-6 py-4">
-        <div className="text-sm text-gray-900">{offering.category}</div>
+        <div className="text-sm text-gray-900">{offering.product?.category || 'N/A'}</div>
       </td>
 
       {/* Type */}
@@ -127,27 +150,31 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeBadgeClass}`}
         >
-          {offering.type}
+          {offering.offering_type}
         </span>
       </td>
 
-      {/* Price & Cost */}
+      {/* Price - from product.pricing.selling_price */}
       <td className="px-6 py-4">
         <div>
           <div className="text-sm font-semibold text-gray-900">
-            ₹{offering.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            ₹{(offering.pricing?.selling_price ?? 0).toLocaleString('en-IN', {
+              maximumFractionDigits: 0,
+            })}
           </div>
           <div className="text-xs text-gray-500">
-            Cost: ₹{offering.cost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            Cost: ₹{(offering.pricing?.cost_price ?? 0).toLocaleString('en-IN', {
+              maximumFractionDigits: 0,
+            })}
           </div>
         </div>
       </td>
 
-      {/* Margin */}
+      {/* Margin - from product.pricing.margin_percentage */}
       <td className="px-6 py-4">
         <div className="text-sm font-semibold text-green-600">
-          {!isNaN(offering.margin) && offering.margin !== 0
-            ? `${offering.margin.toFixed(1)}%`
+          {offering.pricing?.margin_percentage && offering.pricing.margin_percentage !== 0
+            ? `${offering.pricing.margin_percentage.toFixed(1)}%`
             : '—'}
         </div>
       </td>
@@ -155,17 +182,13 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       {/* Stock */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}
-          ></span>
+          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}></span>
           <div>
             <span className={`text-sm font-medium ${stockDisplay.textColor}`}>
               {stockDisplay.text}
             </span>
             {stockDisplay.subtext && (
-              <span className="text-xs text-gray-500 ml-1">
-                {stockDisplay.subtext}
-              </span>
+              <span className="text-xs text-gray-500 ml-1">{stockDisplay.subtext}</span>
             )}
           </div>
         </div>
@@ -180,14 +203,9 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         </span>
       </td>
 
-      {/* Vendor */}
-      <td className="px-6 py-4">
-        <div className="text-sm text-gray-700">{offering.vendor}</div>
-      </td>
-
       {/* Updated */}
       <td className="px-6 py-4">
-        <div className="text-sm text-gray-600">{offering.updated}</div>
+        <div className="text-sm text-gray-600">{formatOfferingDate(offering.updated_at)}</div>
       </td>
     </tr>
   );

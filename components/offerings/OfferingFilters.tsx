@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { FilterRequest } from '@/types/api/request.types';
-import { FilterOptionsResponse } from '@/types/api/response.types';
+import { FilterRequest } from '@/lib/types/api/request.types';
+import { FilterOptionsResponse } from '@/lib/types/api/response.types';
 
 interface OfferingFiltersProps {
   filterOptions: FilterOptionsResponse | null;

@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Offering } from '@/types/offerings/offering.types';
+import { OfferingResponse } from '@/lib/types/offerings/offering.types';
 import OfferingRow from './OfferingRow';
 
 interface OfferingTableProps {
-  offerings: Offering[];
+  offerings: OfferingResponse[];
   isLoading?: boolean;
 }
 
