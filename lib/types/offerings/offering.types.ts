@@ -37,8 +37,11 @@ export interface OfferingResponse {
     };
   };
   brand?: string;
+  vendor?: string;
   subCategoryName?: string;
   subcategory?: string;
+  primaryCategoryId?: string | number;
+  secondaryCategoryId?: string | number;
   [key: string]: any; // Allow additional fields
 }
 
