@@ -11,7 +11,7 @@ interface OfferingDetailHeaderProps {
 
 export default function OfferingDetailHeader({
   offeringName,
-  categoryName = 'Executive Series',
+  categoryName = '—',
   status = 'ACTIVE',
   onEdit,
 }: OfferingDetailHeaderProps) {

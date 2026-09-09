@@ -7,8 +7,10 @@ import {
   getCategoriesByPrimary,
   getSecondaryCategoryById,
 } from '../../api/category.service';
+import { getAllProducts } from '../../api/product.service';
 import { OfferingResponse } from '../../types/offerings/offering.types';
 import {
+  extractAllOfferingsFromDatabase,
   extractAllProductsFromCategories,
   mapProductToOffering,
 } from '../../utils/offerings.mapper';
@@ -21,10 +23,10 @@ export interface SubOrProductItem {
 }
 
 export interface StandardFiltersState {
-  category: string; // Product category (e.g. LIGHTING)
+  category: string; // Product category (e.g. LIGHTING, FURNITURE)
   type: string;     // PRODUCT, SERVICE, BUNDLE
-  status: string;   // PUBLISHED, DRAFT, etc.
-  vendor: string;   // Vendor (maps to offering_name)
+  status: string;   // ACTIVE, PUBLISHED, DRAFT, etc.
+  vendor: string;   // Vendor (maps to offering_name or vendor)
   stock: string;    // In Stock, Low Stock, Out of Stock
   searchQuery: string;
 }
@@ -46,9 +48,10 @@ export interface CategoriesState {
   currentPage: number;
   pageSize: number;
 
-  // Base offerings extracted from categories
+  // Base offerings extracted from database
   primaryCategories: PrimaryCategory[];
   secondaryCategories: SecondaryCategory[];
+  databaseProducts: Product[];
   derivedOfferings: OfferingResponse[];
 
   isLoading: boolean;
@@ -80,16 +83,50 @@ const initialState: CategoriesState = {
 
   primaryCategories: [],
   secondaryCategories: [],
+  databaseProducts: [],
   derivedOfferings: [],
 
   isLoading: false,
   error: null,
 };
 
+/**
+ * Fetch all catalog offerings directly from the database
+ * Combines live MySQL products table with secondary and primary category mappings
+ */
+export const fetchCatalogOfferingsThunk = createAsyncThunk(
+  'categories/fetchCatalogOfferingsThunk',
+  async () => {
+    const [productsRes, secondaryCats, primaryCats] = await Promise.all([
+      getAllProducts(0, 100),
+      getAllSecondaryCategories(),
+      getAllPrimaryCategories(),
+    ]);
+
+    return {
+      products: productsRes?.content || [],
+      secondaryCategories: secondaryCats || [],
+      primaryCategories: primaryCats || [],
+    };
+  }
+);
+
 // Fetch Main Categories based on categoryType
-export const fetchMainCategories = createAsyncThunk(
+export const fetchMainCategories = createAsyncThunk<
+  { type: 'primary' | 'secondary'; data: any[] },
+  'primary' | 'secondary',
+  { state: { categories: CategoriesState } }
+>(
   'categories/fetchMainCategories',
-  async (categoryType: 'primary' | 'secondary') => {
+  async (categoryType, { getState }) => {
+    const state = getState().categories;
+    if (categoryType === 'primary' && state.primaryCategories.length > 0) {
+      return { type: 'primary', data: state.primaryCategories };
+    }
+    if (categoryType === 'secondary' && state.secondaryCategories.length > 0) {
+      return { type: 'secondary', data: state.secondaryCategories };
+    }
+
     if (categoryType === 'primary') {
       const cats = await getAllPrimaryCategories();
       return { type: 'primary', data: cats };
@@ -100,43 +137,37 @@ export const fetchMainCategories = createAsyncThunk(
   }
 );
 
-// Select Main Category and dynamically compute SUB CATEGORY / PRODUCT partition
-export const selectMainCategoryThunk = createAsyncThunk(
-  'categories/selectMainCategoryThunk',
-  async ({
-    categoryId,
-    categoryType,
-  }: {
+// Select Main Category and dynamically compute SUB CATEGORY / PRODUCT partition without extra network calls
+export const selectMainCategoryThunk = createAsyncThunk<
+  {
+    categoryId: string;
+    categoryType: 'primary' | 'secondary';
+    detail: any;
+    items: SubOrProductItem[];
+  },
+  {
     categoryId: string | number;
     categoryType: 'primary' | 'secondary';
-  }) => {
+  },
+  { state: { categories: CategoriesState } }
+>(
+  'categories/selectMainCategoryThunk',
+  async ({ categoryId, categoryType }, { getState }) => {
+    const state = getState().categories;
+    const catIdStr = String(categoryId);
+
     if (categoryType === 'primary') {
-      const detail = await getPrimaryCategoryById(categoryId);
+      const detail =
+        state.primaryCategories.find((c) => String(c.primaryCategoryId) === catIdStr) || null;
 
-      // Inspect subCategory[] directly on primary category
-      const subCategories = (detail?.subCategory && detail.subCategory.length > 0)
-        ? detail.subCategory
-        : [];
+      const subCategories =
+        detail?.subCategory && detail.subCategory.length > 0
+          ? detail.subCategory
+          : state.secondaryCategories;
 
-      let finalSubs = subCategories;
-      // If primary category had no subCategory array items, check if getCategoriesByPrimary has secondary categories
-      if (finalSubs.length === 0) {
-        try {
-          const childSubs = await getCategoriesByPrimary(categoryId);
-          if (childSubs && childSubs.length > 0) {
-            finalSubs = childSubs;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const directProducts = detail?.products || [];
-
-      // Determine partition: subcategories first if present, otherwise direct products
       const items: SubOrProductItem[] = [];
-      if (finalSubs.length > 0) {
-        finalSubs.forEach((sub) => {
+      if (subCategories && subCategories.length > 0) {
+        subCategories.forEach((sub) => {
           items.push({
             type: 'subcategory',
             id: String(sub.secondaryCategoryId),
@@ -144,32 +175,21 @@ export const selectMainCategoryThunk = createAsyncThunk(
             data: sub,
           });
         });
-      } else if (directProducts.length > 0) {
-        directProducts.forEach((prod) => {
-          items.push({
-            type: 'product',
-            id: String(prod.prodId || prod.sku_id),
-            name: prod.offering_name || prod.productName || 'Unnamed Product',
-            data: prod,
-          });
-        });
       }
 
       return {
-        categoryId: String(categoryId),
-        categoryType: 'primary' as const,
+        categoryId: catIdStr,
+        categoryType: 'primary',
         detail,
         items,
       };
     } else {
-      // Secondary Category selected
-      const detail = await getSecondaryCategoryById(categoryId);
-      const subCategories = detail?.subCategory || [];
-      const directProducts = detail?.products || [];
+      const detail =
+        state.secondaryCategories.find((c) => String(c.secondaryCategoryId) === catIdStr) || null;
 
       const items: SubOrProductItem[] = [];
-      if (subCategories.length > 0) {
-        subCategories.forEach((sub: any) => {
+      if (detail?.subCategory && detail.subCategory.length > 0) {
+        detail.subCategory.forEach((sub: any) => {
           items.push({
             type: 'subcategory',
             id: String(sub.secondaryCategoryId || sub.subCategoryId),
@@ -177,20 +197,11 @@ export const selectMainCategoryThunk = createAsyncThunk(
             data: sub,
           });
         });
-      } else if (directProducts.length > 0) {
-        directProducts.forEach((prod) => {
-          items.push({
-            type: 'product',
-            id: String(prod.prodId || prod.sku_id),
-            name: prod.offering_name || prod.productName || 'Unnamed Product',
-            data: prod,
-          });
-        });
       }
 
       return {
-        categoryId: String(categoryId),
-        categoryType: 'secondary' as const,
+        categoryId: catIdStr,
+        categoryType: 'secondary',
         detail,
         items,
       };
@@ -281,6 +292,35 @@ export const categoriesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // fetchCatalogOfferingsThunk
+      .addCase(fetchCatalogOfferingsThunk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchCatalogOfferingsThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.databaseProducts = action.payload.products;
+        state.primaryCategories = action.payload.primaryCategories;
+        state.secondaryCategories = action.payload.secondaryCategories;
+
+        if (state.categoryType === 'primary') {
+          state.mainCategories = state.primaryCategories;
+        } else if (state.categoryType === 'secondary') {
+          state.mainCategories = state.secondaryCategories;
+        }
+
+        // Derive offerings directly from database products & categories
+        state.derivedOfferings = extractAllOfferingsFromDatabase(
+          action.payload.products,
+          state.primaryCategories,
+          state.secondaryCategories
+        );
+      })
+      .addCase(fetchCatalogOfferingsThunk.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || 'Failed to load catalog offerings from database';
+      })
+
       // fetchMainCategories
       .addCase(fetchMainCategories.pending, (state) => {
         state.isLoading = true;
@@ -302,8 +342,9 @@ export const categoriesSlice = createSlice({
           }
         }
 
-        // Derive offerings from all categories
-        state.derivedOfferings = extractAllProductsFromCategories(
+        // Merge and refresh derived offerings from database products & categories
+        state.derivedOfferings = extractAllOfferingsFromDatabase(
+          state.databaseProducts,
           state.primaryCategories,
           state.secondaryCategories
         );
@@ -312,6 +353,7 @@ export const categoriesSlice = createSlice({
         state.isLoading = false;
         state.error = action.error.message || 'Failed to load categories';
       })
+
       // selectMainCategoryThunk
       .addCase(selectMainCategoryThunk.pending, (state) => {
         state.isLoading = true;
@@ -492,31 +534,40 @@ export const selectFilteredOfferings = (state: { categories: CategoriesState }):
     }
   }
 
-  // 2. Filter by Product Category (e.g. LIGHTING)
+  // 2. Filter by Product Category (e.g. LIGHTING, FURNITURE)
   if (filters.category && filters.category !== 'all') {
     result = result.filter(
-      (o) => o.product?.category?.toUpperCase() === filters.category.toUpperCase()
+      (o) =>
+        o.product?.category?.toUpperCase() === filters.category.toUpperCase() ||
+        o.category?.toUpperCase() === filters.category.toUpperCase()
     );
   }
 
-  // 3. Filter by Type (e.g. PRODUCT)
+  // 3. Filter by Type (e.g. PRODUCT, SERVICE)
   if (filters.type && filters.type !== 'all') {
     result = result.filter(
       (o) => o.offering_type?.toUpperCase() === filters.type.toUpperCase()
     );
   }
 
-  // 4. Filter by Status (e.g. PUBLISHED)
+  // 4. Filter by Status (e.g. ACTIVE / PUBLISHED)
   if (filters.status && filters.status !== 'all') {
-    result = result.filter(
-      (o) => o.status?.toUpperCase() === filters.status.toUpperCase()
-    );
+    const filterStatus = filters.status.toUpperCase();
+    result = result.filter((o) => {
+      const oStatus = (o.status || '').toUpperCase();
+      if (filterStatus === 'ACTIVE' || filterStatus === 'PUBLISHED') {
+        return oStatus === 'ACTIVE' || oStatus === 'PUBLISHED';
+      }
+      return oStatus === filterStatus;
+    });
   }
 
   // 5. Filter by Vendor
   if (filters.vendor && filters.vendor !== 'all') {
     result = result.filter(
-      (o) => (o.vendor || o.offering_name) === filters.vendor
+      (o) =>
+        (o.vendor || o.offering_name) === filters.vendor ||
+        o.inventory?.sourcingLogistics?.preferred_vendor === filters.vendor
     );
   }
 
@@ -538,9 +589,16 @@ export const selectFilteredOfferings = (state: { categories: CategoriesState }):
     result = result.filter((o) => {
       const name = (o.offering_name || '').toLowerCase();
       const sku = (o.sku_id || '').toLowerCase();
-      const cat = (o.product?.category || '').toLowerCase();
+      const cat = (o.product?.category || o.category || '').toLowerCase();
+      const subCat = (o.subCategoryName || o.subcategory || '').toLowerCase();
       const vendor = (o.vendor || o.offering_name || '').toLowerCase();
-      return name.includes(q) || sku.includes(q) || cat.includes(q) || vendor.includes(q);
+      return (
+        name.includes(q) ||
+        sku.includes(q) ||
+        cat.includes(q) ||
+        subCat.includes(q) ||
+        vendor.includes(q)
+      );
     });
   }
 

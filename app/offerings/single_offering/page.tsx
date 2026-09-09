@@ -37,6 +37,7 @@ function SingleOfferingContent() {
     <div className="min-h-screen bg-gray-50/60">
       <Sidebar />
       <TopHeader
+        title="ERP Offerings"
         searchQuery=""
         onSearchChange={() => {}}
       />

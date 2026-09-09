@@ -2,22 +2,35 @@
 
 import { useState } from 'react';
 
+interface AdditionalAttr {
+  attribute_name: string;
+  value: string;
+}
+
 interface TechnicalSpecsProps {
   primaryMaterial?: string;
+  secondaryMaterial?: string;
   frameFinish?: string;
   dimensions?: string;
+  weight?: string;
   weightCapacity?: string;
-  warranty?: string;
-  origin?: string;
+  assemblyRequired?: string;
+  cushionDesc?: string;
+  additionalAttributes?: AdditionalAttr[];
+  brand?: string;
 }
 
 export default function TechnicalSpecsCard({
-  primaryMaterial = 'Aniline Suede (Grade A)',
-  frameFinish = 'Matte Carbon Aluminum',
-  dimensions = '820mm x 780mm x 940mm',
-  weightCapacity = 'Up to 150kg (330lbs)',
-  warranty = '10-Year Structural, 3-Year Textile',
-  origin = 'Assembled in Denmark',
+  primaryMaterial = '—',
+  secondaryMaterial = '—',
+  frameFinish = '—',
+  dimensions = '—',
+  weight = '—',
+  weightCapacity = '—',
+  assemblyRequired = '—',
+  cushionDesc,
+  additionalAttributes = [],
+  brand,
 }: TechnicalSpecsProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -52,60 +65,93 @@ export default function TechnicalSpecsCard({
               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
                 PRIMARY MATERIAL
               </div>
-              <div className="text-sm font-semibold text-gray-900">
-                {primaryMaterial}
+              <div className="text-sm font-semibold text-gray-900 capitalize">
+                {primaryMaterial && primaryMaterial !== '—'
+                  ? primaryMaterial.replace(/_/g, ' ').toLowerCase()
+                  : '—'}
               </div>
             </div>
 
-            {/* Frame Finish */}
+            {/* Secondary Material & Finish */}
             <div>
               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
-                FRAME FINISH
+                SECONDARY MATERIAL & FINISH
               </div>
-              <div className="text-sm font-semibold text-gray-900">
-                {frameFinish}
+              <div className="text-sm font-semibold text-gray-900 capitalize">
+                {secondaryMaterial && secondaryMaterial !== '—'
+                  ? secondaryMaterial.replace(/_/g, ' ').toLowerCase()
+                  : '—'}{' '}
+                {frameFinish && frameFinish !== '—'
+                  ? `(${frameFinish.replace(/_/g, ' ').toLowerCase()} Finish)`
+                  : ''}
               </div>
             </div>
 
             {/* Dimensions */}
             <div>
               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
-                DIMENSIONS (W x D x H)
+                DIMENSIONS (L × W × H)
               </div>
               <div className="text-sm font-semibold text-gray-900">
                 {dimensions}
               </div>
             </div>
 
-            {/* Weight Capacity */}
+            {/* Product Weight */}
+            <div>
+              <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
+                PRODUCT WEIGHT
+              </div>
+              <div className="text-sm font-semibold text-gray-900">
+                {weight}
+              </div>
+            </div>
+
+            {/* Weight / Load Capacity */}
             <div>
               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
                 WEIGHT CAPACITY
               </div>
-              <div className="text-sm font-semibold text-gray-900">
-                {weightCapacity}
+              <div className="text-sm font-semibold text-gray-900 capitalize">
+                {weightCapacity && weightCapacity !== '—'
+                  ? weightCapacity.replace(/_/g, ' ').toLowerCase()
+                  : '—'}
               </div>
             </div>
 
-            {/* Warranty */}
+            {/* Assembly Required */}
             <div>
               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
-                WARRANTY
+                ASSEMBLY REQUIRED
               </div>
               <div className="text-sm font-semibold text-gray-900">
-                {warranty}
+                {assemblyRequired}
               </div>
             </div>
 
-            {/* Origin */}
-            <div>
-              <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
-                ORIGIN
+            {/* Cushion / Features */}
+            {cushionDesc && (
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
+                  CUSHION & BUILD
+                </div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {cushionDesc}
+                </div>
               </div>
-              <div className="text-sm font-semibold text-gray-900">
-                {origin}
+            )}
+
+            {/* Additional Attributes from DB */}
+            {additionalAttributes.map((attr, idx) => (
+              <div key={idx}>
+                <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
+                  {attr.attribute_name.toUpperCase()}
+                </div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {attr.value}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       )}

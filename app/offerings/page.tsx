@@ -8,6 +8,7 @@ import OfferingTable from '@/components/offerings/OfferingTable';
 import Pagination from '@/components/offerings/Pagination';
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
 import {
+  fetchCatalogOfferingsThunk,
   fetchMainCategories,
   selectFilteredOfferings,
   selectPaginatedOfferings,
@@ -36,19 +37,18 @@ export default function OfferingsPage() {
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
 
   // ============================================================================
-  // LIFECYCLE - Load initial data
+  // LIFECYCLE - Load initial data directly from database
   // ============================================================================
 
   useEffect(() => {
-    // "all all should be seen": fetch both primary and secondary categories on mount
-    dispatch(fetchMainCategories('primary'));
-    dispatch(fetchMainCategories('secondary'));
+    // Load offerings directly from MySQL database and category mappings
+    dispatch(fetchCatalogOfferingsThunk());
   }, [dispatch]);
 
   return (
     <div className="min-h-screen bg-gray-50/50">
       <Sidebar />
-      <TopHeader onSearch={(query) => dispatch(setSearchQuery(query))} />
+      <TopHeader title="Offerings" onSearch={(query) => dispatch(setSearchQuery(query))} />
 
       {/* Main Content Area */}
       <main className="ml-56 pt-16">

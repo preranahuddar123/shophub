@@ -1,39 +1,60 @@
 'use client';
 
-interface TimelineEvent {
-  id: string;
-  title: string;
-  description: string;
-  timestamp: string;
-  iconType: 'price' | 'gallery' | 'created';
+interface TimelineProps {
+  sellingPrice?: number;
+  costPrice?: number;
+  pricingDesc?: string;
+  currentStock?: number;
+  vendor?: string;
+  leadTime?: number;
+  auditDesc?: string;
+  publishingStatus?: string;
+  scheduleLaunch?: string;
 }
 
-export default function ActivityTimelineCard() {
-  const events: TimelineEvent[] = [
+export default function ActivityTimelineCard({
+  sellingPrice = 0,
+  costPrice = 0,
+  pricingDesc = '',
+  currentStock = 0,
+  vendor = '—',
+  leadTime = 0,
+  auditDesc = 'Catalog record',
+  publishingStatus = 'PUBLISHED',
+  scheduleLaunch,
+}: TimelineProps) {
+  const events = [
     {
       id: '1',
-      title: 'Price adjusted',
-      description: 'MSRP increased from $3,200 to $3,450 by Robert K.',
-      timestamp: 'Oct 04, 2024 • 09:15 AM',
-      iconType: 'price',
+      title: 'Pricing Active',
+      description: `MSRP ₹${sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (Cost: ₹${costPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })})${pricingDesc ? ` — ${pricingDesc}` : ''}.`,
+      timestamp: 'Active Pricing',
+      iconType: 'price' as const,
     },
     {
       id: '2',
-      title: 'Gallery updated',
-      description: '3 high-resolution studio renders added.',
-      timestamp: 'Sep 28, 2024 • 02:30 PM',
-      iconType: 'gallery',
+      title: 'Inventory & Procurement',
+      description: `${currentStock} units in stock. Preferred vendor: ${vendor}${leadTime ? ` with ${leadTime} days lead time` : ''}.`,
+      timestamp: 'Live Stock',
+      iconType: 'gallery' as const,
     },
     {
       id: '3',
-      title: 'Offering created',
-      description: 'Initial catalog entry by System integration.',
-      timestamp: 'Aug 12, 2024 • 11:00 AM',
-      iconType: 'created',
+      title: 'Catalog Record Created',
+      description: `${auditDesc}. Visibility status: ${publishingStatus}.`,
+      timestamp:
+        scheduleLaunch && scheduleLaunch !== '—'
+          ? new Date(scheduleLaunch).toLocaleDateString('en-IN', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : 'Active',
+      iconType: 'created' as const,
     },
   ];
 
-  const renderIcon = (type: TimelineEvent['iconType']) => {
+  const renderIcon = (type: 'price' | 'gallery' | 'created') => {
     switch (type) {
       case 'price':
         return (
@@ -53,7 +74,7 @@ export default function ActivityTimelineCard() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
             />
           </svg>
         );
@@ -102,11 +123,6 @@ export default function ActivityTimelineCard() {
           </div>
         ))}
       </div>
-
-      {/* View Full Log Button */}
-      <button className="w-full bg-gray-100/90 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors text-center mt-2">
-        VIEW FULL LOG
-      </button>
     </div>
   );
 }

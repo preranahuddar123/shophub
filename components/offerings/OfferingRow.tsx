@@ -2,28 +2,46 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  OfferingResponse,
-  getOfferingTypeBadgeClass,
-  getStatusBadgeClass,
-  getStockDisplay,
-  formatOfferingDate,
-} from '@/lib/types/offerings/offering.types';
+import { OfferingResponse } from '@/lib/types/offerings/offering.types';
 
 interface OfferingRowProps {
   offering: OfferingResponse;
 }
 
+// Generate 2-letter uppercase initials from offering name
+function getInitials(name: string = ''): string {
+  if (!name) return 'PR';
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function OfferingRow({ offering }: OfferingRowProps) {
   const router = useRouter();
 
-  const typeBadgeClass = getOfferingTypeBadgeClass(offering.offering_type || 'Product');
-  const statusBadgeClass = getStatusBadgeClass(offering.status);
-  const stockDisplay = getStockDisplay(offering);
-
   const sellingPrice = offering.pricing?.selling_price ?? 0;
   const costPrice = offering.pricing?.cost_price ?? offering.pricing?.cost ?? 0;
-  const margin = offering.pricing?.margin_percentage;
+  
+  // Calculate margin dynamically if missing from DB: ((selling - cost) / selling) * 100
+  let margin: number | null = null;
+  if (
+    offering.pricing?.margin_percentage != null &&
+    !isNaN(Number(offering.pricing.margin_percentage)) &&
+    Number(offering.pricing.margin_percentage) !== 0
+  ) {
+    margin = Number(offering.pricing.margin_percentage);
+  } else if (sellingPrice > 0 && costPrice > 0) {
+    margin = ((sellingPrice - costPrice) / sellingPrice) * 100;
+  }
+
+  const currentStock = offering.inventory?.current_stock ?? 0;
+  const subCategoryTitle =
+    offering.subCategoryName ||
+    offering.subcategory ||
+    offering.description ||
+    (offering.product?.category ? `${offering.product.category} Collection` : 'Catalog Item');
 
   const handleRowClick = () => {
     const targetId = offering.prodId || '1';
@@ -43,10 +61,21 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       role="button"
       className="border-b border-gray-100 hover:bg-gray-50/80 cursor-pointer transition-colors group focus:outline-none focus:bg-gray-50"
     >
-      {/* 1. OFFERING NAME */}
+      {/* 1. OFFERING NAME with Avatar Badge & Subtitle */}
       <td className="px-6 py-4">
-        <div className="text-sm font-semibold text-gray-900 group-hover:text-black transition-colors">
-          {offering.offering_name}
+        <div className="flex items-center gap-3">
+          {/* Avatar Initial Box (w-9 h-9 black rounded-lg matching UI) */}
+          <div className="w-9 h-9 rounded-lg bg-gray-900 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 tracking-wider shadow-xs">
+            {getInitials(offering.offering_name)}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-gray-900 group-hover:text-black transition-colors truncate">
+              {offering.offering_name}
+            </div>
+            <div className="text-xs text-gray-500 font-normal truncate mt-0.5">
+              {subCategoryTitle}
+            </div>
+          </div>
         </div>
       </td>
 
@@ -59,69 +88,62 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
 
       {/* 3. CATEGORY */}
       <td className="px-6 py-4">
-        <div className="text-sm text-gray-900">
-          {offering.product?.category || offering.category || 'N/A'}
+        <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+          {offering.product?.category || offering.category || 'GENERAL'}
         </div>
       </td>
 
       {/* 4. TYPE */}
       <td className="px-6 py-4">
-        <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${typeBadgeClass}`}
-        >
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 capitalize">
           {offering.offering_type?.toLowerCase() || 'product'}
         </span>
       </td>
 
-      {/* 5. PRICE & COST */}
+      {/* 5. PRICE & COST (In Rupees Only) */}
       <td className="px-6 py-4">
         <div>
           <div className="text-sm font-bold text-gray-900">
-            ₹{sellingPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            ₹{sellingPrice.toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </div>
-          <div className="text-xs text-gray-500">
-            Cost: ₹{costPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          <div className="text-xs text-gray-500 mt-0.5">
+            Cost: ₹{costPrice.toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </div>
         </div>
       </td>
 
       {/* 6. MARGIN */}
       <td className="px-6 py-4">
-        <div className="text-sm font-semibold text-emerald-600">
-          {margin != null && !isNaN(Number(margin)) && Number(margin) !== 0
-            ? `${Number(margin).toFixed(1)}%`
-            : '—'}
+        <div className="text-sm font-bold text-emerald-600">
+          {margin !== null ? `${margin.toFixed(1)}%` : '—'}
         </div>
       </td>
 
       {/* 7. STOCK */}
       <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full flex-shrink-0 ${stockDisplay.dotColor}`}></span>
-          <div>
-            <span className={`text-sm font-medium ${stockDisplay.textColor}`}>
-              {stockDisplay.text}
-            </span>
-            {stockDisplay.subtext && (
-              <span className="text-xs text-gray-500 ml-1">{stockDisplay.subtext}</span>
-            )}
-          </div>
+        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+          <span>{currentStock} In Stock</span>
         </div>
       </td>
 
       {/* 8. STATUS */}
       <td className="px-6 py-4">
-        <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${statusBadgeClass}`}
-        >
-          {offering.status}
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200">
+          {offering.status || 'ACTIVE'}
         </span>
       </td>
 
       {/* 9. UPDATED */}
       <td className="px-6 py-4">
         <div className="text-xs text-gray-500 font-normal">
-          {formatOfferingDate(offering.updated_at)}
+          Just now
         </div>
       </td>
     </tr>

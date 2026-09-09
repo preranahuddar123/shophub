@@ -230,6 +230,19 @@ export interface ProdDataResDTO {
     visibility_status?: {
       publishing_status: string;
       visibility?: boolean;
+      schedule_launch?: string;
+    };
+    access_permissions?: {
+      allowed_users?: string[];
+      restricted_region?: string;
+    };
+    system_hooks_integration?: {
+      erp_module_integration?: {
+        sales_module?: boolean;
+        inventory_sync?: boolean;
+        procurement_pipeline?: boolean;
+        accounting_code?: string;
+      };
     };
     audit_trail_notes?: {
       desc?: string;
@@ -264,6 +277,12 @@ export interface ProdDataResDTO {
       attribute_name: string;
       value: string;
     }>;
+  };
+  seo?: {
+    page_title?: string;
+    meta_desc?: string;
+    url_slug?: string;
+    keywords?: string[];
   };
   [key: string]: any;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface NoteItem {
   id: string;
@@ -9,21 +9,56 @@ interface NoteItem {
   timeAgo: string;
 }
 
-export default function InternalNotesCard() {
-  const [notes, setNotes] = useState<NoteItem[]>([
-    {
-      id: '1',
-      text: 'Ensure sales teams are aware of the temporary 15% surcharge for custom suede finishes requested outside the standard catalog.',
-      author: 'Sarah J.',
-      timeAgo: '2 days ago',
-    },
-    {
-      id: '2',
-      text: 'Discontinued velvet variant was officially removed from master SKU list on 09/20.',
-      author: 'System',
-      timeAgo: 'Sep 20',
-    },
-  ]);
+interface InternalNotesProps {
+  auditTrailDesc?: string;
+  accountingCode?: string;
+  allowedUsers?: string[];
+  scheduleLaunch?: string;
+}
+
+export default function InternalNotesCard({
+  auditTrailDesc,
+  accountingCode,
+  allowedUsers = [],
+  scheduleLaunch,
+}: InternalNotesProps) {
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+
+  useEffect(() => {
+    const formattedLaunch =
+      scheduleLaunch && scheduleLaunch !== '—'
+        ? new Date(scheduleLaunch).toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })
+        : 'Active';
+
+    const items: NoteItem[] = [];
+
+    if (auditTrailDesc && auditTrailDesc !== '—') {
+      items.push({
+        id: 'audit-1',
+        text:
+          accountingCode && accountingCode !== '—'
+            ? `${auditTrailDesc}. ERP Accounting Code linked: ${accountingCode}.`
+            : auditTrailDesc,
+        author: 'System Integration',
+        timeAgo: formattedLaunch,
+      });
+    }
+
+    if (allowedUsers && allowedUsers.length > 0) {
+      items.push({
+        id: 'access-2',
+        text: `Access granted to: ${allowedUsers.join(', ')}. All inventory and sales pipelines synchronized.`,
+        author: 'Admin / Security',
+        timeAgo: 'Active',
+      });
+    }
+
+    setNotes(items);
+  }, [auditTrailDesc, accountingCode, allowedUsers, scheduleLaunch]);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
@@ -49,7 +84,7 @@ export default function InternalNotesCard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-900 tracking-tight">
-          Internal Notes
+          Internal Notes & Integration
         </h2>
         <button
           onClick={() => setIsAdding(!isAdding)}

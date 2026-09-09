@@ -2,40 +2,44 @@
 
 import { useState } from 'react';
 
-interface WarehouseRow {
-  warehouse: string;
-  onHand: number;
-  allocated: number;
-  reorderPoint: number;
-  status: 'Optimal' | 'Low Stock' | 'Critical';
-}
-
-interface InventorySourcingCardProps {
+interface InventorySourcingProps {
+  currentStock?: number;
+  minimumStockLevel?: number;
+  reorderQuantity?: number;
+  barcode?: string;
+  skuId?: string;
   preferredVendor?: string;
-  lastUpdate?: string;
+  leadTime?: number;
 }
 
 export default function InventorySourcingCard({
-  preferredVendor = 'Nordic Design Collective (NDC)',
-  lastUpdate = 'Last price update: 14 days ago',
-}: InventorySourcingCardProps) {
+  currentStock = 0,
+  minimumStockLevel = 0,
+  reorderQuantity = 0,
+  barcode = '—',
+  skuId = '—',
+  preferredVendor = '—',
+  leadTime = 0,
+}: InventorySourcingProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [lastCheckMessage, setLastCheckMessage] = useState<string | null>(null);
 
-  const warehouses: WarehouseRow[] = [
+  const stockStatus = currentStock > minimumStockLevel ? 'Optimal' : (currentStock > 0 ? 'Low Stock' : 'Out of Stock');
+
+  const warehouses = [
     {
-      warehouse: 'Main Distribution Center (EU)',
-      onHand: 42,
-      allocated: 12,
-      reorderPoint: 15,
-      status: 'Optimal',
+      warehouse: `Primary Stock Hub (${skuId})`,
+      onHand: currentStock,
+      allocated: Math.round(currentStock * 0.2),
+      reorderPoint: minimumStockLevel,
+      status: stockStatus,
     },
     {
-      warehouse: 'Regional Hub (North America)',
-      onHand: 8,
-      allocated: 6,
-      reorderPoint: 10,
-      status: 'Low Stock',
+      warehouse: `Replenishment Hub (${preferredVendor})`,
+      onHand: reorderQuantity,
+      allocated: 0,
+      reorderPoint: minimumStockLevel,
+      status: 'Optimal',
     },
   ];
 
@@ -57,7 +61,7 @@ export default function InventorySourcingCard({
             Inventory & Sourcing
           </h2>
           {lastCheckMessage && (
-            <span className="text-[11px] font-semibold text-green-600 animate-fade-in bg-green-50 px-2 py-0.5 rounded">
+            <span className="text-[11px] font-semibold text-emerald-600 animate-fade-in bg-emerald-50 px-2 py-0.5 rounded">
               {lastCheckMessage}
             </span>
           )}
@@ -82,7 +86,7 @@ export default function InventorySourcingCard({
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              <th className="pb-3 pr-4 font-bold">WAREHOUSE</th>
+              <th className="pb-3 pr-4 font-bold">WAREHOUSE / LOCATION</th>
               <th className="pb-3 px-4 font-bold">ON HAND</th>
               <th className="pb-3 px-4 font-bold">ALLOCATED</th>
               <th className="pb-3 px-4 font-bold">REORDER POINT</th>
@@ -108,7 +112,7 @@ export default function InventorySourcingCard({
                   <span
                     className={`font-bold ${
                       row.status === 'Optimal'
-                        ? 'text-green-600'
+                        ? 'text-emerald-600'
                         : row.status === 'Low Stock'
                         ? 'text-amber-500'
                         : 'text-red-600'
@@ -132,9 +136,14 @@ export default function InventorySourcingCard({
           <span className="font-bold text-gray-900">
             {preferredVendor}
           </span>
+          {barcode && (
+            <span className="ml-3 text-gray-500 font-mono text-[11px]">
+              Barcode: {barcode}
+            </span>
+          )}
         </div>
-        <div className="text-gray-400 text-xs">
-          {lastUpdate}
+        <div className="text-gray-600 text-xs font-medium">
+          Lead time: {leadTime} Days
         </div>
       </div>
     </div>

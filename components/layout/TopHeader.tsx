@@ -3,18 +3,24 @@
 import Image from 'next/image';
 
 interface TopHeaderProps {
+  title?: string;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onSearch?: (query: string) => void;
 }
 
-export default function TopHeader({ searchQuery = '', onSearchChange, onSearch }: TopHeaderProps) {
+export default function TopHeader({
+  title = 'Offerings',
+  searchQuery = '',
+  onSearchChange,
+  onSearch,
+}: TopHeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
       <div className="h-full px-6 flex items-center justify-between gap-6">
         {/* Left: Page Label */}
         <div className="flex items-center gap-4">
-          <span className="text-sm font-bold text-gray-900 tracking-tight">ERP Offerings</span>
+          <span className="text-sm font-bold text-gray-900 tracking-tight">{title}</span>
         </div>
 
         {/* Center: Search Bar */}
