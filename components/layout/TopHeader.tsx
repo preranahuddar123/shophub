@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 
 interface TopHeaderProps {
@@ -7,14 +8,26 @@ interface TopHeaderProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onSearch?: (query: string) => void;
+  placeholder?: string;
 }
 
 export default function TopHeader({
   title = 'Offerings',
-  searchQuery = '',
+  searchQuery: controlledQuery,
   onSearchChange,
   onSearch,
+  placeholder = 'Search product SKU...',
 }: TopHeaderProps) {
+  const [internalQuery, setInternalQuery] = useState('');
+  const searchQuery = controlledQuery ?? internalQuery;
+
+  const handleSearch = (query: string) => {
+    if (controlledQuery === undefined) {
+      setInternalQuery(query);
+    }
+    (onSearchChange || onSearch)?.(query);
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
       <div className="h-full px-6 flex items-center justify-between gap-6">
@@ -44,9 +57,9 @@ export default function TopHeader({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => (onSearchChange || onSearch)?.(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
-              placeholder="Search product SKU..."
+              placeholder={placeholder}
             />
           </div>
         </div>

@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const menuItems = [
+  { name: 'DASHBOARD', href: '/dashboard', icon: 'dashboard' },
   { name: 'MASTER CATALOG', href: '/offerings', icon: 'list' },
+  { name: 'QUOTE ENGINE', href: '/quote-engine', icon: 'quote' },
   { name: 'CATEGORIES', href: '/categories', icon: 'category' },
   { name: 'IMPORT', href: '/import', icon: 'upload' },
   { name: 'SETTINGS', href: '/settings', icon: 'settings' },
@@ -50,9 +52,22 @@ export default function Sidebar() {
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
+                  {item.icon === 'dashboard' && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="3" y="3" width="7" height="7" rx="1.5" strokeWidth={2}/>
+                      <rect x="14" y="3" width="7" height="7" rx="1.5" strokeWidth={2}/>
+                      <rect x="3" y="14" width="7" height="7" rx="1.5" strokeWidth={2}/>
+                      <rect x="14" y="14" width="7" height="7" rx="1.5" strokeWidth={2}/>
+                    </svg>
+                  )}
                   {item.icon === 'list' && (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  )}
+                  {item.icon === 'quote' && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
                   )}
                   {item.icon === 'category' && (
@@ -78,6 +93,19 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
+
+      {/* View Reports Button at Bottom */}
+      <div className="p-3 border-t border-gray-100">
+        <button
+          type="button"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 rounded-lg text-xs font-semibold transition-colors"
+        >
+          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <span>View Reports</span>
+        </button>
+      </div>
     </aside>
   );
 }

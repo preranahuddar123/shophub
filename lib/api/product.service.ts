@@ -61,6 +61,25 @@ export const getAllProducts = async (
 };
 
 /**
+ * Convenience helper to return flat array of products from the Page response
+ */
+export const fetchCatalogProducts = async (): Promise<any[]> => {
+  try {
+    const data = await getAllProducts(0, 100);
+    if (data && Array.isArray(data.content)) {
+      return data.content;
+    }
+    if (Array.isArray(data)) {
+      return data;
+    }
+    return [];
+  } catch (err) {
+    console.error('Failed to fetch catalog products:', err);
+    return [];
+  }
+};
+
+/**
  * Fetch one product by ID directly from the database
  * GET /api/v1/products/getProduct/{prodId}
  */
