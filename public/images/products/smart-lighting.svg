@@ -1,0 +1,15 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="8" fill="#1E293B"/>
+  <rect x="0.5" y="0.5" width="47" height="47" rx="7.5" stroke="#334155"/>
+  <!-- Smart Panel Screen -->
+  <rect x="8" y="9" width="32" height="22" rx="3" fill="#0F172A" stroke="#475569" stroke-width="1"/>
+  <!-- Glowing sliders and UI indicators -->
+  <circle cx="16" cy="20" r="5" stroke="#38BDF8" stroke-width="1.5"/>
+  <circle cx="16" cy="20" r="2" fill="#38BDF8"/>
+  <rect x="25" y="15" width="11" height="2" rx="1" fill="#38BDF8"/>
+  <rect x="25" y="20" width="8" height="2" rx="1" fill="#64748B"/>
+  <rect x="25" y="25" width="10" height="2" rx="1" fill="#22C55E"/>
+  <!-- Eco leaf / power icon at bottom -->
+  <path d="M22 36C22 36 26 34 26 38C26 40 24 41 22 41C20 41 18 40 18 38C18 34 22 36 22 36Z" fill="#22C55E"/>
+  <circle cx="32" cy="38" r="2" fill="#64748B"/>
+</svg>

@@ -4,9 +4,15 @@ import { useState } from 'react';
 
 interface TopHeaderProps {
   onSearch: (query: string) => void;
+  title?: string;
+  placeholder?: string;
 }
 
-export default function TopHeader({ onSearch }: TopHeaderProps) {
+export default function TopHeader({
+  onSearch,
+  title = 'ERP Offerings',
+  placeholder = 'Search categories...',
+}: TopHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearch = (query: string) => {
@@ -19,7 +25,7 @@ export default function TopHeader({ onSearch }: TopHeaderProps) {
       <div className="h-full px-6 flex items-center justify-between gap-6">
         {/* Left: Page Label */}
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-900">Offerings</span>
+          <span className="text-base font-bold text-gray-900 tracking-tight">{title}</span>
         </div>
 
         {/* Center: Search Bar */}
@@ -44,8 +50,8 @@ export default function TopHeader({ onSearch }: TopHeaderProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
-              placeholder="Search Master Catalog..."
+              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              placeholder={placeholder}
             />
           </div>
         </div>

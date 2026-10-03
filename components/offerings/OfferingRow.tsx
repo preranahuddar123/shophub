@@ -158,11 +158,11 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       <td className="px-6 py-4">
         <div>
           <div className="text-sm font-bold text-gray-900">
-            ${sellingPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ₹{sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           {costPrice > 0 && (
             <div className="text-xs text-gray-500 font-normal mt-0.5">
-              Cost: ${costPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Cost: ₹{costPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           )}
         </div>
@@ -186,6 +186,34 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
         <div className="text-xs text-gray-500 font-normal">
           {getRelativeTime(offering.updated_at)}
         </div>
+      </td>
+
+      {/* 10. ACTIONS - Add to Cart */}
+      <td className="px-6 py-4">
+        <button
+          onClick={() => {
+            // Navigate to quote engine with this item
+            const params = new URLSearchParams({
+              addToCart: 'true',
+              prodId: offering.prodId?.toString() || '',
+              offeringName: offering.offering_name || '',
+              price: offering.pricing?.selling_price?.toString() || '0',
+              cost: offering.pricing?.cost_price?.toString() || '0',
+              category: offering.product?.category || offering.category || 'GENERAL',
+              skuId: offering.sku_id || '',
+              image: offering.media?.primary_image || '',
+            });
+            
+            window.location.href = `/quote-engine?${params.toString()}`;
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-black hover:bg-gray-800 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+          title="Add to Quote Engine"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Quote
+        </button>
       </td>
     </tr>
   );

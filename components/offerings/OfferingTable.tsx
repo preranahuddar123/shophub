@@ -83,6 +83,12 @@ export default function OfferingTable({ offerings, isLoading = false }: Offering
               >
                 UPDATED
               </th>
+              <th
+                scope="col"
+                className="px-6 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider"
+              >
+                ACTIONS
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
