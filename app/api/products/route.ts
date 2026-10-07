@@ -1,0 +1,150 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
+
+function parseJson(value: unknown, fallback: unknown) {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return fallback;
+  }
+}
+
+function mapProductRow(row: any) {
+  const sellingPrice = Number(row.selling_price ?? row.price ?? 0);
+  const costPrice = Number(row.cost_price ?? 0);
+  const galleryImages = parseJson(row.gallery_images, []) as string[];
+  const allowedUsers = parseJson(row.allowed_users, []) as string[];
+  const seoKeywords = parseJson(row.seo_keywords, []) as string[];
+  const additionalAttributes = parseJson(row.additional_attributes, []) as any[];
+
+  return {
+    prodId: row.prodId ?? row.prod_id ?? row.id ?? row.sku_id,
+    offering_name: row.offering_name || row.product_name || 'Unnamed Offering',
+    offering_type: row.offering_type || 'PRODUCT',
+    sku_id: row.sku_id || row.sku || '',
+    category: row.category || 'FURNITURE',
+    brand: row.brand || '',
+    tags: Array.isArray(seoKeywords) ? seoKeywords : [],
+    short_desc: row.short_desc || '',
+    long_desc: row.long_desc || '',
+    featured_offer: Boolean(row.featured_offer),
+    pricing: {
+      selling_price: sellingPrice,
+      cost_price: costPrice,
+      cost: costPrice,
+      discount: Number(row.discount ?? 0),
+      gst_rate: row.gst_rate || 'GST_18',
+      units: row.price_unit || row.units || 'PER_PIECE',
+      desc: row.pricing_desc || '',
+    },
+    inventory: {
+      sku_Id: row.inventory_sku_id || row.sku_id || '',
+      barcode: row.barcode || '',
+      current_stock: Number(row.current_stock ?? 0),
+      minimum_stock_level: Number(row.minimum_stock_level ?? 0),
+      reorder_quantity: Number(row.reorder_quantity ?? 0),
+      sourcingLogistics: {
+        preferred_vendor: row.preferred_vendor || '',
+        lead_time: Number(row.lead_time ?? 0),
+      },
+    },
+    media: {
+      primary_image: row.primary_image || row.image_url || '',
+      gallery_images: Array.isArray(galleryImages) ? galleryImages : [],
+      video_link: row.video_link || '',
+      image_360: row.image_360 || '',
+      product_brochure: row.product_brochure || '',
+      upload_draw: row.upload_draw || '',
+    },
+    specifications: {
+      material_finish: {
+        primary_material: row.primary_material || '',
+        secondary_material: row.secondary_material || '',
+        finish_type: row.finish_type || '',
+      },
+      technical_properties: {
+        load_capacity: row.load_capacity || '',
+      },
+      additional_attributes: Array.isArray(additionalAttributes) ? additionalAttributes : [],
+    },
+    seo: {
+      keywords: Array.isArray(seoKeywords) ? seoKeywords : [],
+    },
+    internal: {
+      visibility_status: {
+        publishing_status: row.publishing_status || (row.is_published ? 'PUBLISHED' : 'DRAFT'),
+        visibility: row.visibility !== 0 && row.visibility !== false,
+      },
+      access_permissions: {
+        allowed_users: Array.isArray(allowedUsers) ? allowedUsers : [],
+        restricted_region: row.restricted_region || '',
+      },
+    },
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl;
+    const id = searchParams.get('id');
+    const pool = getHomesMerryDbPool();
+
+    if (id) {
+      const [rows]: any = await pool.query(
+        'SELECT * FROM product WHERE prod_id = ? OR sku_id = ? LIMIT 1',
+        [id, id]
+      );
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) {
+        return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      }
+      return NextResponse.json(mapProductRow(row));
+    }
+
+    const page = Math.max(0, Number(searchParams.get('page') || 0));
+    const size = Math.min(200, Math.max(1, Number(searchParams.get('size') || 50)));
+    const offset = page * size;
+
+    const [countRows]: any = await pool.query('SELECT COUNT(*) AS total FROM product');
+    const totalElements = Number(countRows?.[0]?.total ?? 0);
+
+    const [rows]: any = await pool.query(
+      'SELECT * FROM product ORDER BY prod_id DESC LIMIT ? OFFSET ?',
+      [size, offset]
+    );
+
+    const content = (Array.isArray(rows) ? rows : []).map(mapProductRow);
+    const totalPages = Math.max(1, Math.ceil(totalElements / size));
+
+    return NextResponse.json({
+      content,
+      totalElements,
+      totalPages,
+      size,
+      number: page,
+      first: page === 0,
+      last: page >= totalPages - 1,
+      numberOfElements: content.length,
+      empty: content.length === 0,
+    });
+  } catch (error: any) {
+    console.error('[API /api/products GET] Failed to load products from MySQL:', error?.message || error);
+    return NextResponse.json(
+      {
+        content: [],
+        totalElements: 0,
+        totalPages: 0,
+        size: 0,
+        number: 0,
+        first: true,
+        last: true,
+        numberOfElements: 0,
+        empty: true,
+        error: error?.message || 'Failed to load products',
+      },
+      { status: 200 }
+    );
+  }
+}

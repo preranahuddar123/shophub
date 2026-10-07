@@ -7,6 +7,7 @@ import QuoteCatalogSection, { CatalogProduct } from '@/components/quote-engine/Q
 import QuoteSidebar from '@/components/quote-engine/QuoteSidebar';
 import QuoteBottomBar from '@/components/quote-engine/QuoteBottomBar';
 import { getAllPrimaryCategories, getAllSecondaryCategories } from '@/lib/api/category.service';
+import { getAllProducts } from '@/lib/api/product.service';
 import { getProjectsForQuoteEngine, getCustomersFromLeads } from '@/lib/api/leads.service';
 import { getRequirementScope, transformScopeToRooms } from '@/lib/api/requirement-scope.service';
 
@@ -419,7 +420,34 @@ export default function QuoteEnginePage() {
           });
         }
 
-        const loadedProducts = Array.from(productsMap.values());
+        let loadedProducts = Array.from(productsMap.values());
+        if (loadedProducts.length === 0) {
+          const page = await getAllProducts(0, 100);
+          loadedProducts = (page.content || []).map((product: any) => {
+            const numId = typeof product.prodId === 'string' ? parseInt(product.prodId, 10) : product.prodId;
+            return {
+              prodId: numId || 0,
+              offering_name: product.offering_name || 'Unknown Product',
+              category: product.category || 'GENERAL',
+              sku_id: product.sku_id || '',
+              brand: product.brand || '',
+              short_desc: product.short_desc || product.description || '',
+              pricing: {
+                selling_price: product.pricing?.selling_price || 0,
+                cost_price: product.pricing?.cost_price || 0,
+                margin_percentage: product.pricing?.margin_percentage || 0,
+              },
+              inventory: {
+                current_stock: product.inventory?.current_stock || 0,
+                minimum_stock_level: product.inventory?.minimum_stock_level || 0,
+              },
+              media: {
+                primary_image: product.media?.primary_image || '',
+              },
+              lead_time: product.lead_time || 0,
+            };
+          });
+        }
         setProducts(loadedProducts);
       } catch (error) {
         console.error('Failed to load products:', error);
