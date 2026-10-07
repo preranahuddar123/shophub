@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { PrimaryCategory, SecondaryCategory, Product } from '../../types/api.types';
 import {
   getAllPrimaryCategories,
@@ -442,22 +442,32 @@ export const selectSelectedSubOrProductId = (state: { categories: CategoriesStat
 export const selectFilters = (state: { categories: CategoriesState }) =>
   state.categories.filters;
 
+type CategoriesRoot = { categories: CategoriesState };
+
 /**
  * Filtered Offerings Selector
  * Applies Category Hierarchy partition logic, standard attribute filters, and search query
  */
-export const selectFilteredOfferings = (state: { categories: CategoriesState }): OfferingResponse[] => {
-  const {
+export const selectFilteredOfferings = createSelector(
+  [
+    (state: CategoriesRoot) => state.categories.categoryType,
+    (state: CategoriesRoot) => state.categories.selectedMainCategoryId,
+    (state: CategoriesRoot) => state.categories.selectedMainCategory,
+    (state: CategoriesRoot) => state.categories.selectedSubOrProductId,
+    (state: CategoriesRoot) => state.categories.selectedSubOrProductItem,
+    (state: CategoriesRoot) => state.categories.derivedOfferings,
+    (state: CategoriesRoot) => state.categories.filters,
+  ],
+  (
     categoryType,
     selectedMainCategoryId,
     selectedMainCategory,
     selectedSubOrProductId,
     selectedSubOrProductItem,
     derivedOfferings,
-    filters,
-  } = state.categories;
-
-  let result = [...derivedOfferings];
+    filters
+  ): OfferingResponse[] => {
+  let result = derivedOfferings;
 
   // 1. Filter by Category Hierarchy Partitions
   if (categoryType === 'primary') {
@@ -603,7 +613,8 @@ export const selectFilteredOfferings = (state: { categories: CategoriesState }):
   }
 
   return result;
-};
+  }
+);
 
 export const selectCurrentPage = (state: { categories: CategoriesState }) =>
   state.categories.currentPage || 1;
@@ -611,12 +622,18 @@ export const selectCurrentPage = (state: { categories: CategoriesState }) =>
 export const selectPageSize = (state: { categories: CategoriesState }) =>
   state.categories.pageSize || 10;
 
-export const selectPaginatedOfferings = (state: { categories: CategoriesState }): OfferingResponse[] => {
-  const filtered = selectFilteredOfferings(state);
-  const page = state.categories.currentPage || 1;
-  const size = state.categories.pageSize || 10;
-  const start = (page - 1) * size;
-  return filtered.slice(start, start + size);
-};
+export const selectPaginatedOfferings = createSelector(
+  [
+    selectFilteredOfferings,
+    (state: CategoriesRoot) => state.categories.currentPage,
+    (state: CategoriesRoot) => state.categories.pageSize,
+  ],
+  (filtered, currentPage, pageSize): OfferingResponse[] => {
+    const page = currentPage || 1;
+    const size = pageSize || 10;
+    const start = (page - 1) * size;
+    return filtered.slice(start, start + size);
+  }
+);
 
 export default categoriesSlice.reducer;

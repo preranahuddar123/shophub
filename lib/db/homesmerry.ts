@@ -25,10 +25,10 @@ let pool: mysql.Pool | null = null;
 export function getHomesMerryDbPool(): mysql.Pool {
   if (!pool) {
     pool = mysql.createPool({
-      host: process.env.HOMES_MERRY_DB_HOST || 'localhost',
+      host: process.env.HOMES_MERRY_DB_HOST || '127.0.0.1',
       port: Number(process.env.HOMES_MERRY_DB_PORT || 3306),
       user: process.env.HOMES_MERRY_DB_USER || 'root',
-      password: process.env.HOMES_MERRY_DB_PASSWORD || 'root@00',
+      password: process.env.HOMES_MERRY_DB_PASSWORD || 'root@root',
       database: process.env.HOMES_MERRY_DB_NAME || 'homes_merry',
       waitForConnections: true,
       connectionLimit: 8,

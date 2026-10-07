@@ -63,6 +63,7 @@ export function mapProductToOffering(
     product: {
       category: product.category || 'FURNITURE',
       offering_name: offeringName,
+      image_url: product.media?.primary_image || product.image_url || product.image,
     },
     internal: {
       visibility_status: {

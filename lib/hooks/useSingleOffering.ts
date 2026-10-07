@@ -35,8 +35,17 @@ export function useSingleOffering(prodId: string | number = 1): SingleOfferingSt
     setError(null);
 
     try {
-      // 1. Fetch the product directly from backend GET /api/v1/products/getProduct/{prodId}
-      const prod = await getProductById(prodId);
+      const reduxProduct =
+        reduxCategories.databaseProducts.find(
+          (p: any) =>
+            String(p.prodId || p.prod_id || p.id) === String(prodId) ||
+            String(p.sku_id) === String(prodId)
+        ) ||
+        reduxCategories.derivedOfferings.find(
+          (o) => String(o.prodId) === String(prodId) || String(o.sku_id) === String(prodId)
+        );
+
+      const prod = (await getProductById(prodId)) || (reduxProduct as ProdDataResDTO | undefined) || null;
 
       if (!prod) {
         throw new Error(`Product not found with ID: ${prodId}`);

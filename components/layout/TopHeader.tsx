@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 interface TopHeaderProps {
   title?: string;
@@ -18,6 +19,7 @@ export default function TopHeader({
   onSearch,
   placeholder = 'Search product SKU...',
 }: TopHeaderProps) {
+  const router = useRouter();
   const [internalQuery, setInternalQuery] = useState('');
   const searchQuery = controlledQuery ?? internalQuery;
 
@@ -102,7 +104,7 @@ export default function TopHeader({
           </button>
 
           {/* Create Offering Button */}
-          <button className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-xs font-semibold hover:bg-gray-800 transition-colors shadow-xs">
+          <button onClick={()=>router.push('/offerings/CreateOfferings')} className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-xs font-semibold hover:bg-gray-800 transition-colors shadow-xs">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>

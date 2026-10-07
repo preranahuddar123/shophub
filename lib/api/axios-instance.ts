@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base API URL - defaults to localhost if not set
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://hows.hubinterior.com/api/v1';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -23,19 +23,10 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - silent error handling
+// Response interceptor - silent error handling (callers already have fallbacks)
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response) {
-      console.error(`API Error: ${error.response.status} ${error.config?.url}`);
-    } else if (error.request) {
-      console.warn('Backend offline (using mock UI data):', error.message);
-    } else {
-      console.error('Error:', error.message);
-    }
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export default apiClient;

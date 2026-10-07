@@ -62,43 +62,74 @@ const extractLeads = (data: unknown): Lead[] => {
   return [];
 };
 
+type LeadsFetchResult = {
+  leads: Lead[];
+  /** Spring rejected the CRM call (missing/invalid token). Other lead types will fail the same way. */
+  authDenied: boolean;
+};
+
 /**
  * Fetch leads for a specific lead type (default: glead)
  * GET /leads/filter?leadType={leadType}
  */
-export const getFilteredLeads = async (params: LeadsFilterParams = {}): Promise<Lead[]> => {
+const fetchFilteredLeads = async (params: LeadsFilterParams = {}): Promise<LeadsFetchResult> => {
   try {
     const leadType = params.leadType || 'glead';
     const response = await apiClient.get<LeadsResponse>('/leads/filter', {
       params: { leadType, ...params },
+      validateStatus: () => true,
     });
-    const leads = extractLeads(response.data);
-    return leads.map((l) => ({ ...l, leadType }));
+    if (response.status === 401 || response.status === 403) {
+      return { leads: [], authDenied: true };
+    }
+    if (response.status < 200 || response.status >= 300) {
+      return { leads: [], authDenied: false };
+    }
+    const leads = extractLeads(response.data).map((l) => ({ ...l, leadType }));
+    return { leads, authDenied: false };
   } catch {
-    return [];
+    return { leads: [], authDenied: false };
   }
 };
+
+export const getFilteredLeads = async (params: LeadsFilterParams = {}): Promise<Lead[]> => {
+  const { leads } = await fetchFilteredLeads(params);
+  return leads;
+};
+
+let crmLeadsInFlight: Promise<Lead[]> | null = null;
 
 /**
  * Concurrently fetch leads across multiple CRM lead tables (glead, mlead, formlead, addlead, websitelead)
  * WITHOUT requiring any backend changes!
  */
 export const getAllCrmLeads = async (params: LeadsFilterParams = {}): Promise<Lead[]> => {
-  // Query primary CRM tables concurrently
-  const targetLeadTypes = ['glead', 'mlead', 'formlead', 'addlead', 'websitelead'];
+  if (crmLeadsInFlight && Object.keys(params).length === 0) {
+    return crmLeadsInFlight;
+  }
 
-  const settled = await Promise.allSettled(
-    targetLeadTypes.map((lt) => getFilteredLeads({ ...params, leadType: lt }))
-  );
-
-  const combinedLeads: Lead[] = [];
-  settled.forEach((res) => {
-    if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
-      combinedLeads.push(...res.value);
+  const load = (async () => {
+    const targetLeadTypes = ['glead', 'mlead', 'formlead', 'addlead', 'websitelead'];
+    const probe = await fetchFilteredLeads({ ...params, leadType: targetLeadTypes[0] });
+    if (probe.authDenied) {
+      return [];
     }
-  });
 
-  return combinedLeads;
+    const remaining = await Promise.all(
+      targetLeadTypes.slice(1).map((lt) => fetchFilteredLeads({ ...params, leadType: lt }))
+    );
+
+    return [probe, ...remaining].flatMap((result) => result.leads);
+  })();
+
+  if (Object.keys(params).length === 0) {
+    crmLeadsInFlight = load;
+    load.finally(() => {
+      crmLeadsInFlight = null;
+    });
+  }
+
+  return load;
 };
 
 /**
@@ -124,12 +155,7 @@ export const getCustomersFromLeads = async (): Promise<{
   customerId?: string;
   realName?: string;
 }[]> => {
-  // 1. Fetch leads across all available CRM tables
-  let leads = await getAllCrmLeads();
-  if (!leads || leads.length === 0) {
-    // If multi-table query returns empty, try single glead query as fallback
-    leads = await getFilteredLeads({ leadType: 'glead' });
-  }
+  const leads = await getAllCrmLeads();
 
   // Map to resolve customer names by customerId across tables
   const customerNameMap = new Map<string, string>();
@@ -216,10 +242,7 @@ export const transformLeadToProject = (lead: Lead) => {
 };
 
 export const getProjectsForQuoteEngine = async () => {
-  let leads = await getAllCrmLeads();
-  if (!leads || leads.length === 0) {
-    leads = await getFilteredLeads({ leadType: 'glead' });
-  }
+  const leads = await getAllCrmLeads();
 
   if (leads.length === 0) {
     // Fallback projects matching known CRM records

@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { OfferingResponse } from '@/lib/types/offerings/offering.types';
 
@@ -20,6 +21,11 @@ function getInitials(name: string = ''): string {
 
 export default function OfferingRow({ offering }: OfferingRowProps) {
   const router = useRouter();
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrl =
+    offering.product?.image_url && !offering.product.image_url.includes('example.com')
+      ? offering.product.image_url
+      : undefined;
 
   const sellingPrice = offering.pricing?.selling_price ?? 0;
   const costPrice = offering.pricing?.cost_price ?? offering.pricing?.cost ?? 0;
@@ -65,8 +71,19 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
       <td className="px-6 py-4">
         <div className="flex items-center gap-3">
           {/* Avatar Initial Box (w-9 h-9 black rounded-lg matching UI) */}
-          <div className="w-9 h-9 rounded-lg bg-gray-900 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 tracking-wider shadow-xs">
-            {getInitials(offering.offering_name)}
+          <div className="w-9 h-9 rounded-lg bg-gray-900 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 tracking-wider shadow-xs overflow-hidden relative">
+            {imageUrl && !imageFailed ? (
+              <Image
+                src={imageUrl}
+                alt={offering.offering_name}
+                width={36}
+                height={36}
+                className="w-full h-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              getInitials(offering.offering_name)
+            )}
           </div>
           <div className="min-w-0">
             <div className="text-sm font-bold text-gray-900 group-hover:text-black transition-colors truncate">

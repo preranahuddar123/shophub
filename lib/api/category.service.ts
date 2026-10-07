@@ -2,9 +2,54 @@ import apiClient from './axios-instance';
 import {
   PrimaryCategory,
   SecondaryCategory,
+  Product,
+  ApiError,
 } from '../types/api.types';
 
 export type { PrimaryCategory, SecondaryCategory };
+
+async function getLocalProducts(): Promise<Product[]> {
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const response = await fetch(`${origin}/api/products?page=0&size=100`, { cache: 'no-store' });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data?.content) ? data.content : [];
+  } catch {
+    return [];
+  }
+}
+
+function groupProductsByCategory(products: Product[]) {
+  const groups = new Map<string, Product[]>();
+  for (const product of products) {
+    const name = String(product.category || 'GENERAL').toUpperCase();
+    const list = groups.get(name) || [];
+    list.push(product);
+    groups.set(name, list);
+  }
+  return groups;
+}
+
+async function getCategoriesFromLocalProducts(kind: 'primary' | 'secondary') {
+  const products = await getLocalProducts();
+  if (products.length === 0) return [];
+  const groups = groupProductsByCategory(products);
+  return [...groups.entries()].map(([name, grouped], index) => {
+    if (kind === 'primary') {
+      return {
+        primaryCategoryId: index + 1,
+        primaryCategoryName: name,
+        products: grouped,
+      } as PrimaryCategory;
+    }
+    return {
+      secondaryCategoryId: index + 1,
+      secondaryCategoryName: name,
+      products: grouped,
+    } as SecondaryCategory;
+  });
+}
 
 /**
  * Fetch all primary categories directly from the database
@@ -12,14 +57,16 @@ export type { PrimaryCategory, SecondaryCategory };
  */
 export const getAllPrimaryCategories = async (): Promise<PrimaryCategory[]> => {
   try {
-    const response = await apiClient.get<PrimaryCategory[]>('/categories/getAllCategories');
-    if (response.data && Array.isArray(response.data)) {
+    const response = await apiClient.get<PrimaryCategory[]>('/categories/getAllCategories', {
+      validateStatus: () => true,
+    });
+    if (response.status >= 200 && response.status < 300 && Array.isArray(response.data) && response.data.length > 0) {
       return response.data;
     }
-  } catch (error: any) {
-    console.error('[category.service] getAllPrimaryCategories database query failed:', error.message);
+  } catch {
+    // Remote category API is down — use local catalog.
   }
-  return [];
+  return getCategoriesFromLocalProducts('primary');
 };
 
 /**
@@ -46,14 +93,16 @@ export const getPrimaryCategoryById = async (
  */
 export const getAllSecondaryCategories = async (): Promise<SecondaryCategory[]> => {
   try {
-    const response = await apiClient.get<SecondaryCategory[]>('/secondary-categories/getAllCategories');
-    if (response.data && Array.isArray(response.data)) {
+    const response = await apiClient.get<SecondaryCategory[]>('/secondary-categories/getAllCategories', {
+      validateStatus: () => true,
+    });
+    if (response.status >= 200 && response.status < 300 && Array.isArray(response.data) && response.data.length > 0) {
       return response.data;
     }
-  } catch (error: any) {
-    console.error('[category.service] getAllSecondaryCategories database query failed:', error.message);
+  } catch {
+    // Remote category API is down — use local catalog.
   }
-  return [];
+  return getCategoriesFromLocalProducts('secondary');
 };
 
 /**
@@ -102,68 +151,6 @@ export const getSecondaryCategoryById = async (
   return null;
 };
 
-export const createPrimaryCategory = async (payload: any): Promise<PrimaryCategory> => {
-  try {
-    const response = await apiClient.post<PrimaryCategory>('/categories/createCategory', payload);
-    if (response.data) return response.data;
-  } catch (error: any) {
-    console.error('[category.service] createPrimaryCategory failed:', error.message);
-  }
-  return {
-    primaryCategoryId: Date.now(),
-    primaryCategoryName: payload.primaryCategoryName || 'New Primary Category',
-    primaryCategoryDescription: payload.primaryCategoryDescription,
-  };
-};
-
-export const createSecondaryCategory = async (payload: any): Promise<SecondaryCategory> => {
-  try {
-    const response = await apiClient.post<SecondaryCategory>('/secondary-categories/createCategory', payload);
-    if (response.data) return response.data;
-  } catch (error: any) {
-    console.error('[category.service] createSecondaryCategory failed:', error.message);
-  }
-  return {
-    secondaryCategoryId: Date.now(),
-    secondaryCategoryName: payload.secondaryCategoryName || 'New Secondary Category',
-    secondaryCategoryDescription: payload.secondaryCategoryDescription,
-  };
-};
-
-export const updatePrimaryCategory = async (
-  id: string | number,
-  payload: any
-): Promise<PrimaryCategory> => {
-  try {
-    const response = await apiClient.put<PrimaryCategory>(`/categories/updateCategory/${id}`, payload);
-    if (response.data) return response.data;
-  } catch (error: any) {
-    console.error(`[category.service] updatePrimaryCategory(${id}) failed:`, error.message);
-  }
-  return {
-    primaryCategoryId: id,
-    primaryCategoryName: payload.primaryCategoryName,
-    primaryCategoryDescription: payload.primaryCategoryDescription,
-  };
-};
-
-export const updateSecondaryCategory = async (
-  id: string | number,
-  payload: any
-): Promise<SecondaryCategory> => {
-  try {
-    const response = await apiClient.put<SecondaryCategory>(`/secondary-categories/updateCategory/${id}`, payload);
-    if (response.data) return response.data;
-  } catch (error: any) {
-    console.error(`[category.service] updateSecondaryCategory(${id}) failed:`, error.message);
-  }
-  return {
-    secondaryCategoryId: id,
-    secondaryCategoryName: payload.secondaryCategoryName,
-    secondaryCategoryDescription: payload.secondaryCategoryDescription,
-  };
-};
-
 export const deletePrimaryCategory = async (id: string | number): Promise<void> => {
   try {
     await apiClient.delete(`/categories/deleteCategory/${id}`);
@@ -184,7 +171,7 @@ export const deleteSecondaryCategory = async (id: string | number): Promise<void
  * Create a new primary category
  * POST /categories/createCategory
  */
-export const createPrimaryCategory = async (data: {
+export const createPrimaryCategory = async (data: {)
   primaryCategoryName: string;
   primaryCategoryDescription?: string;
   subCategory?: any[];

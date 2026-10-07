@@ -94,23 +94,36 @@ export const getRequirementScope = async (
   // 1. Try primary API endpoint via apiClient (/leads/{leadType}/{leadId}/configuration-scope/requirements)
   try {
     const response = await apiClient.get<RequirementScopeResponse>(
-      `/leads/${leadType}/${leadId}/configuration-scope/requirements`
+      `/leads/${leadType}/${leadId}/configuration-scope/requirements`,
+      { validateStatus: () => true }
     );
-    if (response.data && Array.isArray(response.data.selectedRooms) && response.data.selectedRooms.length > 0) {
+    if (
+      response.status >= 200 &&
+      response.status < 300 &&
+      response.data &&
+      Array.isArray(response.data.selectedRooms) &&
+      response.data.selectedRooms.length > 0
+    ) {
       return response.data;
     }
-  } catch (err) {
-    // console.warn('Primary requirement scope endpoint failed, attempting alternatives...', err);
-  }
-
-  // 2. Try room-specific endpoint (/rooms/requirement-scope)
-  try {
-    const response = await apiClient.get<RequirementScopeResponse>(
-      `/rooms/requirement-scope`,
-      { params: { leadId, leadType } }
-    );
-    if (response.data && Array.isArray(response.data.selectedRooms) && response.data.selectedRooms.length > 0) {
-      return response.data;
+    if (response.status !== 401 && response.status !== 403) {
+      try {
+        const roomResponse = await apiClient.get<RequirementScopeResponse>(
+          `/rooms/requirement-scope`,
+          { params: { leadId, leadType }, validateStatus: () => true }
+        );
+        if (
+          roomResponse.status >= 200 &&
+          roomResponse.status < 300 &&
+          roomResponse.data &&
+          Array.isArray(roomResponse.data.selectedRooms) &&
+          roomResponse.data.selectedRooms.length > 0
+        ) {
+          return roomResponse.data;
+        }
+      } catch {
+        // Continue to next fallback
+      }
     }
   } catch {
     // Continue to next fallback
