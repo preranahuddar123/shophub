@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createProduct } from '@/lib/api/product.service';
+import { createProduct, updateOfferingSection } from '@/lib/api/product.service';
 import RichTextEditor from './RichTextEditor';
 
 type TabId = 'GENERAL' | 'PRICING' | 'INVENTORY' | 'MEDIA' | 'SPECIFICATIONS' | 'SEO' | 'INTERNAL';
@@ -196,6 +196,7 @@ export default function CreateOfferingForm() {
           units: product.pricing?.units || 'PER_PIECE',
           pricing_desc: product.pricing?.desc || '',
           current_stock: Number(product.inventory?.current_stock) || 0,
+          barcode: product.inventory?.barcode || '',
           minimum_stock_level: String(product.inventory?.minimum_stock_level ?? ''),
           reorder_quantity: String(product.inventory?.reorder_quantity ?? ''),
           preferred_vendor: product.inventory?.sourcingLogistics?.preferred_vendor || 'IN_HOUSE',
@@ -214,10 +215,14 @@ export default function CreateOfferingForm() {
           secondary_material: product.specifications?.material_finish?.secondary_material || prev.secondary_material,
           finish_type: product.specifications?.material_finish?.finish_type || prev.finish_type,
           load_capacity: product.specifications?.technical_properties?.load_capacity || prev.load_capacity,
-          page_title: product.seo?.page_title || product.offering_name || '',
+          page_title: product.seo?.page_title || '',
           meta_desc: product.seo?.meta_desc || '',
           url_slug: product.seo?.url_slug || '',
-          keywords: Array.isArray(product.seo?.keywords) ? product.seo.keywords : prev.keywords,
+          keywords: Array.isArray(product.seo?.keywords) && product.seo.keywords.length ? product.seo.keywords : [],
+          schedule_launch: product.internal?.visibility_status?.schedule_launch || '',
+          restricted_region: product.internal?.access_permissions?.restricted_region || '',
+          accounting_code: product.internal?.system_hooks_integration?.erp_module_integration?.accounting_code || '',
+          audit_notes: product.internal?.audit_trail_notes?.desc || '',
           publishing_status: product.internal?.visibility_status?.publishing_status || 'DRAFT',
           allowed_users: product.internal?.access_permissions?.allowed_users || prev.allowed_users,
         }));
@@ -255,28 +260,16 @@ export default function CreateOfferingForm() {
     if (!form.long_desc.trim()) items.push({ tab: 'GENERAL', label: 'Long description' });
     if (!Number(form.selling_price)) items.push({ tab: 'PRICING', label: 'Selling price' });
     if (!Number(form.cost_price)) items.push({ tab: 'PRICING', label: 'Cost price' });
-    if (!form.pricing_desc.trim()) items.push({ tab: 'PRICING', label: 'Pricing notes' });
-    if (form.current_stock === 0 && form.minimum_stock_level === '') items.push({ tab: 'INVENTORY', label: 'Stock levels' });
     if (!form.primary_image.trim()) items.push({ tab: 'MEDIA', label: 'Primary image' });
     if (!Number(form.length_cm) && !Number(form.width_cm) && !Number(form.height_cm)) {
       items.push({ tab: 'SPECIFICATIONS', label: 'Dimensions' });
     }
-    if (!form.page_title.trim()) items.push({ tab: 'SEO', label: 'Page title' });
-    if (!form.meta_desc.trim()) items.push({ tab: 'SEO', label: 'Meta description' });
-    if (!form.url_slug.trim()) items.push({ tab: 'SEO', label: 'URL slug' });
     return items;
   }, [form]);
 
   const setField = (key: keyof typeof form, value: any) => {
     setForm((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key === 'offering_name' && !prev.url_slug) {
-        next.url_slug = slugify(String(value));
-      }
-      if (key === 'offering_name' && !prev.page_title) {
-        next.page_title = String(value);
-      }
-      return next;
+      return { ...prev, [key]: value };
     });
   };
 
@@ -318,6 +311,7 @@ export default function CreateOfferingForm() {
       },
       inventory: {
         sku_Id: form.sku_id,
+        barcode: form.barcode,
         current_stock: Number(form.current_stock) || 0,
         minimum_stock_level: Number(form.minimum_stock_level) || 0,
         reorder_quantity: Number(form.reorder_quantity) || 0,
@@ -384,6 +378,35 @@ export default function CreateOfferingForm() {
     };
   };
 
+  const sectionPayload = (full: ReturnType<typeof buildPayload>) => {
+    if (tab === 'PRICING') {
+      return {
+        cost_price: full.pricing.cost_price,
+        selling_price: full.pricing.selling_price,
+        discount: full.pricing.discount,
+        gst_rate: full.pricing.gst_rate,
+        units: full.pricing.units,
+        desc: full.pricing.desc || '',
+      };
+    }
+    if (tab === 'INVENTORY') return full.inventory;
+    if (tab === 'MEDIA') {
+      return {
+        primary_image: full.media.primary_image,
+        gallery_images: full.media.gallery_images,
+        video_link: full.media.video_link,
+      };
+    }
+    if (tab === 'SEO') return full.seo;
+    if (tab === 'SPECIFICATIONS') {
+      return {
+        physical_dimensions: full.specifications.physical_dimensions,
+        material_finish: full.specifications.material_finish,
+      };
+    }
+    return full.internal;
+  };
+
   const submit = async (publish: boolean) => {
     if (!form.offering_name.trim() || !form.sku_id.trim()) {
       setError('Offering name and SKU are required before you can save.');
@@ -394,7 +417,25 @@ export default function CreateOfferingForm() {
     setError(null);
     setSuccess(null);
     try {
-      const data = await createProduct(buildPayload(publish), prodId);
+      const full = buildPayload(publish);
+      const slotTabs = ['PRICING', 'INVENTORY', 'MEDIA', 'SEO', 'SPECIFICATIONS', 'INTERNAL'] as const;
+      const updateSlot = Boolean(prodId && slotTabs.includes(tab as (typeof slotTabs)[number]) && !(publish && !isPublished));
+
+      if (updateSlot) {
+        const slug = full.seo.url_slug || slugify(form.offering_name);
+        const payload = sectionPayload(full);
+        await updateOfferingSection({
+          prodId,
+          section: tab as (typeof slotTabs)[number],
+          sku_id: form.sku_id,
+          url_slug: slug,
+          payload: tab === 'SEO' ? { ...payload, url_slug: slug } : payload,
+        });
+        setSuccess(`${tab.charAt(0)}${tab.slice(1).toLowerCase()} updated.`);
+        return;
+      }
+
+      const data = await createProduct(full, prodId);
       const savedId = Number(data.prodId || prodId);
       if (savedId) {
         setProdId(savedId);
@@ -405,7 +446,7 @@ export default function CreateOfferingForm() {
       if (publish) {
         setSuccess(
           missing.length
-            ? `Published. ${missing.length} field${missing.length === 1 ? '' : 's'} still need updates — fill them and click Update Offering.`
+            ? `Published. ${missing.length} field${missing.length === 1 ? '' : 's'} still need updates — fill them and click Update.`
             : 'This offering is live. You can keep editing and save updates anytime.'
         );
       } else {
@@ -1150,21 +1191,19 @@ export default function CreateOfferingForm() {
         )}
       </div>
       {prodId && incomplete.length > 0 && (
-        <aside className="w-64 shrink-0 sticky top-36 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
-            Not updated yet
-          </p>
-          <p className="mt-1 text-[11px] text-amber-800">{incomplete.length} fields remaining</p>
-          <div className="mt-3 space-y-1.5">
+        <aside className="w-64 shrink-0 sticky top-36 rounded-2xl bg-[#F6F7F8] p-6">
+          <h2 className="text-sm font-semibold text-gray-900">Not updated yet</h2>
+          <p className="mt-0.5 text-xs text-gray-500">{incomplete.length} fields remaining</p>
+          <div className="mt-4 space-y-2">
             {incomplete.map((item) => (
               <button
                 key={`${item.tab}-${item.label}`}
                 type="button"
                 onClick={() => setTab(item.tab)}
-                className="block w-full rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-left text-[11px] font-semibold text-amber-900 hover:border-amber-400"
+                className="block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left hover:border-gray-300"
               >
-                {item.label}
-                <span className="block text-[10px] font-medium text-amber-700">{item.tab}</span>
+                <span className="block text-sm font-medium text-gray-900">{item.label}</span>
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">{item.tab}</span>
               </button>
             ))}
           </div>

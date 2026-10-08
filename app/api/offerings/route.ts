@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
 import { getSessionFromRequest } from '@/lib/auth/server';
 import { ensureAuthSchema } from '@/lib/auth/ensure';
-
-const SPRING_BOOT_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
+import { trySpring } from '@/lib/api/spring';
 
 function toSpringPayload(body: any) {
   return {
@@ -67,29 +66,6 @@ function localValues(payload: any, sessionId: number) {
     weight_kg: Number(payload.specifications?.physical_dimensions?.weight) || 0,
     created_by: sessionId,
   };
-}
-
-async function trySpring(path: string, payload: any, method = 'POST') {
-  try {
-    const token = process.env.NEXT_PUBLIC_API_BEARER_TOKEN;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const springRes = await fetch(`${SPRING_BOOT_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: JSON.stringify(payload),
-    });
-    const springText = await springRes.text();
-    let springJson: any = null;
-    try {
-      springJson = springText ? JSON.parse(springText) : null;
-    } catch {
-      springJson = { raw: springText };
-    }
-    return { ok: springRes.ok, status: springRes.status, data: springJson };
-  } catch (err: any) {
-    return { ok: false, status: 502, data: { error: err.message } };
-  }
 }
 
 function requireCatalogUser(request: NextRequest) {
