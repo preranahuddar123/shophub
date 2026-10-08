@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
 
+function isPublishedRow(row: any): boolean {
+  const value = row?.is_published;
+  if (value == null) return false;
+  if (Buffer.isBuffer(value)) return value[0] === 1;
+  return value === 1 || value === true || value === '1';
+}
+
 function parseJson(value: unknown, fallback: unknown) {
   if (value == null || value === '') return fallback;
   if (typeof value === 'object') return value;
@@ -30,7 +37,7 @@ function mapProductRow(row: any) {
     short_desc: row.short_desc || '',
     long_desc: row.long_desc || '',
     featured_offer: Boolean(row.featured_offer),
-    is_published: row.is_published === 1 || row.is_published === true || row.is_published === '1',
+    is_published: isPublishedRow(row),
     pricing: {
       selling_price: sellingPrice,
       cost_price: costPrice,
@@ -108,7 +115,7 @@ export async function GET(request: NextRequest) {
     const size = Math.min(200, Math.max(1, Number(searchParams.get('size') || 50)));
     const offset = page * size;
 
-    const publishedWhere = '(is_published IS NULL OR is_published = 1)';
+    const publishedWhere = 'CAST(is_published AS UNSIGNED) = 1';
     const [countRows]: any = await pool.query(
       `SELECT COUNT(*) AS total FROM product WHERE ${publishedWhere}`
     );
