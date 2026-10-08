@@ -256,6 +256,14 @@ function QuotationsContent() {
             quotations={filteredQuotations}
             selectedQuoteNumber={selectedQuoteNumber}
             onSelectQuote={handleSelectQuote}
+            onViewQuote={(quote) => {
+              const targetUrl =
+                quote.pdfUrl || quote.quoteUrl || `https://design.hubinterior.com/quote/${quote.quoteNumber}`;
+              if (typeof window !== 'undefined') {
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+              }
+              showToast(`Opening PDF for quotation ${quote.quoteNumber}...`);
+            }}
           />
 
           {/* Section 2: Active Quote Detail (Left) + Quick Actions / Validity / Comparison (Right) */}

@@ -54,7 +54,19 @@ export const getAllProducts = async (
       return response.data;
     }
   } catch (error: any) {
-    console.error('[product.service] getAllProducts database query failed:', error.message);
+    console.warn('[product.service] Live Spring Boot catalog offline, falling back to local MySQL API:', error.message);
+    try {
+      const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXTAUTH_URL || 'http://localhost:3000');
+      const localRes = await fetch(`${baseUrl}/api/products?page=${page}&size=${size}`);
+      if (localRes.ok) {
+        const data = await localRes.json();
+        if (data && Array.isArray(data.content) && data.content.length > 0) {
+          return data;
+        }
+      }
+    } catch (localErr: any) {
+      console.warn('[product.service] Local MySQL products API fallback failed:', localErr.message);
+    }
   }
 
   return createEmptyPageResponse(page, size);
@@ -73,8 +85,8 @@ export const fetchCatalogProducts = async (): Promise<any[]> => {
       return data;
     }
     return [];
-  } catch (err) {
-    console.error('Failed to fetch catalog products:', err);
+  } catch (err: any) {
+    console.warn('Failed to fetch catalog products (using fallback):', err.message);
     return [];
   }
 };
@@ -90,7 +102,19 @@ export const getProductById = async (prodId: number | string): Promise<ProdDataR
       return response.data;
     }
   } catch (error: any) {
-    console.error(`[product.service] getProductById(${prodId}) database query failed:`, error.message);
+    console.warn(`[product.service] getProductById(${prodId}) database query failed:`, error.message);
+    try {
+      const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXTAUTH_URL || 'http://localhost:3000');
+      const localRes = await fetch(`${baseUrl}/api/products?id=${prodId}`);
+      if (localRes.ok) {
+        const data = await localRes.json();
+        if (data && !data.error) {
+          return data;
+        }
+      }
+    } catch (localErr: any) {
+      console.warn(`[product.service] Local getProductById(${prodId}) fallback failed:`, localErr.message);
+    }
   }
 
   return null;

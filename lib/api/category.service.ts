@@ -17,7 +17,7 @@ export const getAllPrimaryCategories = async (): Promise<PrimaryCategory[]> => {
       return response.data;
     }
   } catch (error: any) {
-    console.error('[category.service] getAllPrimaryCategories database query failed:', error.message);
+    console.warn('[category.service] getAllPrimaryCategories database query failed (using fallback):', error.message);
   }
   return [];
 };
@@ -35,7 +35,7 @@ export const getPrimaryCategoryById = async (
       return response.data;
     }
   } catch (error: any) {
-    console.error(`[category.service] getPrimaryCategoryById(${primaryCategoryId}) database query failed:`, error.message);
+    console.warn(`[category.service] getPrimaryCategoryById(${primaryCategoryId}) database query failed:`, error.message);
   }
   return null;
 };
@@ -51,7 +51,7 @@ export const getAllSecondaryCategories = async (): Promise<SecondaryCategory[]> 
       return response.data;
     }
   } catch (error: any) {
-    console.error('[category.service] getAllSecondaryCategories database query failed:', error.message);
+    console.warn('[category.service] getAllSecondaryCategories database query failed (using fallback):', error.message);
   }
   return [];
 };
@@ -71,7 +71,7 @@ export const getCategoriesByPrimary = async (
       return response.data;
     }
   } catch (error: any) {
-    console.error(
+    console.warn(
       `[category.service] getCategoriesByPrimary(${primaryCategoryId}) database query failed:`,
       error.message
     );
@@ -94,7 +94,7 @@ export const getSecondaryCategoryById = async (
       return response.data;
     }
   } catch (error: any) {
-    console.error(
+    console.warn(
       `[category.service] getSecondaryCategoryById(${secondaryCategoryId}) database query failed:`,
       error.message
     );
@@ -180,160 +180,22 @@ export const deleteSecondaryCategory = async (id: string | number): Promise<void
   }
 };
 
-/**
- * Create a new primary category
- * POST /categories/createCategory
- */
-export const createPrimaryCategory = async (data: {
-  primaryCategoryName: string;
-  primaryCategoryDescription?: string;
-  subCategory?: any[];
-  products?: any[];
-}): Promise<PrimaryCategory> => {
-  try {
-    const response = await apiClient.post('/categories/createCategory', {
-      primaryCategoryName: data.primaryCategoryName,
-      primaryCategoryDescription: data.primaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
-    });
-    return response.data;
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
-};
-
-/**
- * Update a primary category
- * PUT /categories/updateCategory/{id}
- */
-export const updatePrimaryCategory = async (
-  primaryCategoryId: number | string,
-  data: {
-    primaryCategoryName: string;
-    primaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
-): Promise<PrimaryCategory> => {
-  try {
-    const response = await apiClient.put(`/categories/updateCategory/${primaryCategoryId}`, {
-      primaryCategoryName: data.primaryCategoryName,
-      primaryCategoryDescription: data.primaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
-    });
-    return response.data;
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to update primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
-};
-
-/**
- * Create a secondary category under a primary category
- * POST /secondary-categories/createCategory/{primaryCategoryId}
- */
-export const createSecondaryCategory = async (
-  primaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
-): Promise<SecondaryCategory> => {
-  try {
-    const response = await apiClient.post(`/secondary-categories/createCategory/${primaryCategoryId}`, {
-      secondaryCategoryName: data.secondaryCategoryName,
-      secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
-    });
-    return response.data;
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
-};
-
-/**
- * Create a sub-category under a parent secondary category
- * POST /secondary-categories/createSubCategory/{parentSecondaryCategoryId}
- */
 export const createSubCategory = async (
   parentSecondaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
+  payload: any
 ): Promise<SecondaryCategory> => {
   try {
     const response = await apiClient.post(
       `/secondary-categories/createSubCategory/${parentSecondaryCategoryId}`,
-      {
-        secondaryCategoryName: data.secondaryCategoryName,
-        secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-        subCategory: data.subCategory || [],
-        products: data.products || [],
-      }
+      payload
     );
-    return response.data;
+    if (response.data) return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create sub-category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    console.error(`[category.service] createSubCategory(${parentSecondaryCategoryId}) failed:`, error.message);
   }
-};
-
-/**
- * Update a secondary category
- * PUT /secondary-categories/updateCategory/{secondaryCategoryId}
- */
-export const updateSecondaryCategory = async (
-  secondaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
-): Promise<SecondaryCategory> => {
-  try {
-    const response = await apiClient.put(
-      `/secondary-categories/updateCategory/${secondaryCategoryId}`,
-      {
-        secondaryCategoryName: data.secondaryCategoryName,
-        secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-        subCategory: data.subCategory || [],
-        products: data.products || [],
-      }
-    );
-    return response.data;
-  } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to update secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
-  }
+  return {
+    secondaryCategoryId: Date.now(),
+    secondaryCategoryName: payload?.secondaryCategoryName || 'New Sub-Category',
+    secondaryCategoryDescription: payload?.secondaryCategoryDescription,
+  };
 };

@@ -30,6 +30,8 @@ export interface OfferingResponse {
   product?: {
     category: string;           // e.g., LIGHTING, ELECTRONICS
     offering_name?: string;
+    image_url?: string;
+    [key: string]: any;
   };
   internal?: {
     visibility_status: {
