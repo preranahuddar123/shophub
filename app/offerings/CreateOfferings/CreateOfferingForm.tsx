@@ -365,22 +365,17 @@ export default function CreateOfferingForm() {
 
   return (
     <div className="pb-28">
-      <div className="mx-auto w-full max-w-5xl px-10 pt-8 pb-2">
+      <div className="w-full max-w-5xl px-10 pt-8 pb-2">
         <p className="text-[10px] font-semibold tracking-[0.18em] text-gray-400 uppercase">
           Offerings <span className="mx-1.5 text-gray-300">›</span> {prodId ? 'Edit' : 'New Entry'}
         </p>
         <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-950">
           {prodId ? 'Update Offering' : 'Create Offering'}
         </h1>
-        <p className="mt-2 text-sm text-gray-500">
-          {isPublished
-            ? 'This offering is live. Fill any missing details below and save an update.'
-            : 'Use Next to move through each section, or publish from any step. Save Draft keeps it off the live catalog.'}
-        </p>
       </div>
 
       <div className="sticky top-16 z-20 mt-6 border-b border-gray-200 bg-white">
-        <div className="mx-auto w-full max-w-5xl px-10 flex gap-1 overflow-x-auto">
+        <div className="w-full max-w-5xl px-10 flex gap-1 overflow-x-auto">
           {TABS.map((item) => (
             <button
               key={item}
@@ -419,7 +414,7 @@ export default function CreateOfferingForm() {
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-6xl px-10">
+      <div className="w-full max-w-6xl px-10">
       <div className="mt-6 flex items-start gap-6">
       <div className="min-w-0 flex-1 space-y-5">
         {tab === 'GENERAL' && (
@@ -1130,7 +1125,7 @@ export default function CreateOfferingForm() {
       </div>
 
       <div className="fixed bottom-0 right-0 left-56 z-20 border-t border-gray-200 bg-white">
-      <div className="mx-auto w-full max-w-5xl px-10 py-3 flex items-center justify-between gap-3">
+      <div className="w-full max-w-5xl px-10 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
