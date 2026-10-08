@@ -135,6 +135,7 @@ export default function OfferingDetailView({
         offeringName={offeringName}
         categoryName={categoryName}
         status={status}
+        prodId={product?.prodId || (product as any)?.prod_id || offering?.id || '1'}
       />
 
       {/* Main Two-Column Layout */}
