@@ -67,14 +67,14 @@ export default function DashboardPage() {
             </div>
 
             {/* Create Offering Button */}
-            <button className="flex items-center gap-1.5 bg-black hover:bg-neutral-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors">
+            <Link href="/offerings/CreateOfferings" className="flex items-center gap-1.5 bg-black hover:bg-neutral-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors">
               <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               <div className="flex flex-col text-left leading-tight">
                 <span>Create Offering</span>
               </div>
-            </button>
+            </Link>
 
             {/* Notifications Bell */}
             <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">

@@ -1,12 +1,17 @@
-import Sidebar from "@/components/layout/Sidebar";
+'use client';
 
-export default function CreateOfferings(){
-    return (
-        <main>
-           <div className="min-h-screen bg-gray-50/60">
-            <Sidebar/>
-            </div>
+import Sidebar from '@/components/layout/Sidebar';
+import TopHeader from '@/components/layout/TopHeader';
+import CreateOfferingForm from '@/components/offerings/create/CreateOfferingForm';
 
-        </main>
-    )
+export default function CreateOfferings() {
+  return (
+    <div className="min-h-screen bg-white">
+      <Sidebar />
+      <TopHeader title="ERP Offerings" />
+      <main className="ml-56 pt-16 min-h-screen bg-white">
+        <CreateOfferingForm />
+      </main>
+    </div>
+  );
 }

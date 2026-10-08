@@ -30,6 +30,7 @@ function mapProductRow(row: any) {
     short_desc: row.short_desc || '',
     long_desc: row.long_desc || '',
     featured_offer: Boolean(row.featured_offer),
+    is_published: row.is_published === 1 || row.is_published === true || row.is_published === '1',
     pricing: {
       selling_price: sellingPrice,
       cost_price: costPrice,
@@ -107,11 +108,14 @@ export async function GET(request: NextRequest) {
     const size = Math.min(200, Math.max(1, Number(searchParams.get('size') || 50)));
     const offset = page * size;
 
-    const [countRows]: any = await pool.query('SELECT COUNT(*) AS total FROM product');
+    const publishedWhere = '(is_published IS NULL OR is_published = 1)';
+    const [countRows]: any = await pool.query(
+      `SELECT COUNT(*) AS total FROM product WHERE ${publishedWhere}`
+    );
     const totalElements = Number(countRows?.[0]?.total ?? 0);
 
     const [rows]: any = await pool.query(
-      'SELECT * FROM product ORDER BY prod_id DESC LIMIT ? OFFSET ?',
+      `SELECT * FROM product WHERE ${publishedWhere} ORDER BY prod_id DESC LIMIT ? OFFSET ?`,
       [size, offset]
     );
 

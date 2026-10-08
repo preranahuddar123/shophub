@@ -1,131 +1,84 @@
-/**
- * ==============================================================================
- * FILE: app/api/offerings/route.ts
- * PURPOSE: Offering Creation Handler (Spring Boot + Apidog Integration)
- * ==============================================================================
- * WHY THIS FILE WAS CREATED:
- * Powers the "+ CREATE OFFERING" action modal in the top navigation header:
- * 1. Takes user input (offering name, SKU, category, brand, price, cost, stock, desc).
- * 2. Structures the exact JSON payload expected by the Spring Boot endpoint
- *    `POST /api/v1/products/createProduct` (Apidog: `ProductService_CreateProduct`).
- * 3. Dispatches the creation request to the live Spring Boot service on port 8080.
- * 4. Automatically increments the `offerings_count` of the chosen brand in MySQL
- *    `homes_merry.brands` so the table and stats reflect the new offering instantly.
- * ==============================================================================
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
 
 const SPRING_BOOT_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
 
-export async function POST(request: NextRequest) {
+function toSpringPayload(body: any) {
+  return {
+    offering_name: body.offering_name,
+    offering_type: body.offering_type || 'PRODUCT',
+    sku_id: body.sku_id,
+    category: String(body.category || 'FURNITURE').toUpperCase(),
+    brand: body.brand,
+    brand_id: body.brand_id != null ? Number(body.brand_id) : undefined,
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    short_desc: body.short_desc || body.offering_name,
+    long_desc: body.long_desc || body.short_desc || body.offering_name,
+    featured_offer: Boolean(body.featured_offer),
+    is_published: Boolean(body.is_published),
+    pricing: body.pricing,
+    inventory: body.inventory,
+    media: body.media,
+    specifications: body.specifications,
+    seo: body.seo,
+    internal: body.internal,
+  };
+}
 
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      offering_name,
-      offering_type = 'PRODUCT',
-      sku_id,
-      category,
-      brand,
-      selling_price = 0,
-      cost_price = 0,
-      current_stock = 0,
-      short_desc = '',
-      publishing_status = 'PUBLISHED',
-    } = body;
+    const payload = toSpringPayload(body);
 
-    if (!offering_name || !sku_id || !brand) {
+    if (!payload.offering_name || !payload.sku_id) {
       return NextResponse.json(
-        { success: false, error: 'offering_name, sku_id, and brand are required.' },
+        { success: false, error: 'offering_name and sku_id are required.' },
         { status: 400 }
       );
     }
 
-    // 1. First attempt to call the Spring Boot API (Apidog ProductService_CreateProduct)
-    let springCreated = false;
+    let springRes: Response;
     try {
-      const springPayload = {
-        offering_name,
-        offering_type,
-        sku_id,
-        category: (category || 'FURNITURE').toUpperCase(),
-        brand,
-        tags: [category?.toLowerCase() || 'offering'],
-        short_desc: short_desc || offering_name,
-        long_desc: short_desc || offering_name,
-        featured_offer: false,
-        pricing: {
-          cost_price: Number(cost_price) || 0,
-          selling_price: Number(selling_price) || 0,
-          discount: 0,
-          gst_rate: 'GST_18',
-          units: 'PER_PIECE',
-          desc: 'Standard catalog pricing',
-        },
-        inventory: {
-          sku_Id: sku_id,
-          barcode: '890' + Math.floor(1000000000 + Math.random() * 9000000000),
-          current_stock: Number(current_stock) || 0,
-          minimum_stock_level: 5,
-          reorder_quantity: 10,
-          sourcingLogistics: {
-            preferred_vendor: 'VENDOR_A',
-            lead_time: 7,
-          },
-        },
-        media: {
-          primary_image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=400',
-          gallery_images: [],
-          video_link: '',
-          image_360: '',
-          product_brochure: '',
-          upload_draw: '',
-        },
-        specifications: {
-          physical_dimensions: { length: 100, width: 80, height: 75, weight: 25 },
-          material_finish: { primary_material: 'SOLID_WOOD', secondary_material: 'METAL', finish_type: 'MATTE' },
-          technical_properties: { assembly_required: false, load_capacity: 'UP_TO_200_KG', desc: '' },
-          additional_attributes: [],
-        },
-        seo: {
-          page_title: `${offering_name} - ${brand}`,
-          meta_desc: short_desc || offering_name,
-          url_slug: offering_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          keywords: [brand.toLowerCase(), category?.toLowerCase() || 'offering'],
-        },
-        internal: {
-          visibility_status: {
-            publishing_status,
-            visibility: publishing_status === 'PUBLISHED',
-            schedule_launch: null,
-          },
-          access_permissions: { allowed_users: ['admin@example.com'], restricted_region: 'NONE' },
-          system_hooks_integration: {
-            erp_module_integration: { sales_module: true, inventory_sync: true, procurement_pipeline: true, accounting_code: null },
-          },
-          audit_trail_notes: null,
-        },
-      };
-
-      const res = await fetch(`${SPRING_BOOT_BASE_URL}/products/createProduct`, {
+      springRes = await fetch(`${SPRING_BOOT_BASE_URL}/products/createProduct`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(springPayload),
+        body: JSON.stringify(payload),
       });
-
-      if (res.ok) {
-        springCreated = true;
-      }
     } catch (err: any) {
-      console.warn('[Offerings API] Spring Boot endpoint error, falling back to direct DB insert:', err.message);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Cannot reach ${SPRING_BOOT_BASE_URL}/products/createProduct (${err?.cause?.code || err.message}). Start Spring Boot on port 8080.`,
+        },
+        { status: 502 }
+      );
     }
 
-    // 2. Direct MySQL insert if Spring Boot failed or direct database persistence
-    const pool = getHomesMerryDbPool();
+    const springText = await springRes.text();
+    let springJson: any = null;
+    try {
+      springJson = springText ? JSON.parse(springText) : null;
+    } catch {
+      springJson = { raw: springText };
+    }
 
-    if (!springCreated) {
+    if (!springRes.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            springJson?.message ||
+            springJson?.error ||
+            `Spring createProduct failed (${springRes.status})`,
+          status: springRes.status,
+          details: springJson,
+        },
+        { status: springRes.status }
+      );
+    }
+
+    try {
+      const pool = getHomesMerryDbPool();
       await pool.query(
         `INSERT INTO product (
           offering_name, offering_type, sku_id, category, brand, current_stock,
@@ -137,38 +90,56 @@ export async function POST(request: NextRequest) {
         ) VALUES (
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
-          '[]', '[]', '["admin@example.com"]', '[]',
-          'MATTE', 'UP_TO_200_KG', 'VENDOR_A', 'SOLID_WOOD', 'METAL',
-          'NONE', 'GST_18', 'PER_PIECE', 0, 7, 5, 10,
-          'Standard pricing', ?, ?, ?, 0, 1, 1, 1, 1
+          ?, '[]', '["admin@example.com"]', ?,
+          ?, ?, ?, ?, ?,
+          'NONE', ?, ?, ?, ?, ?, ?,
+          'Standard pricing', ?, ?, ?, ?, 1, 1, 1, 1
         )`,
         [
-          offering_name,
-          offering_type,
-          sku_id,
-          (category || 'FURNITURE').toUpperCase(),
-          brand,
-          Number(current_stock) || 0,
-          Number(selling_price) || 0,
-          Number(cost_price) || 0,
-          publishing_status === 'PUBLISHED' ? 1 : 0,
-          publishing_status,
-          short_desc || offering_name,
-          short_desc || offering_name,
-          sku_id,
+          payload.offering_name,
+          payload.offering_type,
+          payload.sku_id,
+          payload.category,
+          payload.brand || '',
+          Number(payload.inventory?.current_stock) || 0,
+          Number(payload.pricing?.selling_price) || 0,
+          Number(payload.pricing?.cost_price) || 0,
+          payload.is_published ? 1 : 0,
+          payload.is_published ? 'PUBLISHED' : 'DRAFT',
+          JSON.stringify(payload.media?.gallery_images || []),
+          JSON.stringify(payload.seo?.keywords || payload.tags || []),
+          payload.specifications?.material_finish?.finish_type || 'MATTE',
+          payload.specifications?.technical_properties?.load_capacity || 'UP_TO_200_KG',
+          payload.inventory?.sourcingLogistics?.preferred_vendor || '',
+          payload.specifications?.material_finish?.primary_material || 'SOLID_WOOD',
+          payload.specifications?.material_finish?.secondary_material || '',
+          payload.pricing?.gst_rate || 'GST_18',
+          payload.pricing?.units || 'PER_PIECE',
+          Number(payload.pricing?.discount) || 0,
+          Number(payload.inventory?.sourcingLogistics?.lead_time) || 0,
+          Number(payload.inventory?.minimum_stock_level) || 0,
+          Number(payload.inventory?.reorder_quantity) || 0,
+          payload.short_desc,
+          payload.long_desc,
+          payload.sku_id,
+          payload.featured_offer ? 1 : 0,
         ]
       );
-    }
 
-    // 3. Increment offerings count for this brand in the brands table
-    await pool.query(
-      `UPDATE brands SET offerings_count = offerings_count + 1 WHERE brand_name = ?`,
-      [brand]
-    );
+      if (payload.brand) {
+        await pool.query(
+          `UPDATE brands SET offerings_count = offerings_count + 1 WHERE brand_name = ?`,
+          [payload.brand]
+        );
+      }
+    } catch (dbErr: any) {
+      console.warn('[API /api/offerings POST] Local catalog insert skipped:', dbErr?.message);
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Offering "${offering_name}" created successfully for ${brand}`,
+      message: `Offering "${payload.offering_name}" created`,
+      product: springJson,
     });
   } catch (error: any) {
     console.error('[API /api/offerings POST] Error creating offering:', error);
