@@ -2,7 +2,7 @@
 
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
-import CreateOfferingForm from '@/components/offerings/create/CreateOfferingForm';
+import CreateOfferingForm from './CreateOfferingForm';
 
 export default function CreateOfferings() {
   return (

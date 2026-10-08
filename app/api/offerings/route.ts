@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
+import { getSessionFromRequest } from '@/lib/auth/server';
+import { ensureAuthSchema } from '@/lib/auth/ensure';
 
 const SPRING_BOOT_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
 
@@ -27,6 +29,14 @@ function toSpringPayload(body: any) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = getSessionFromRequest(request);
+    if (!session || session.role !== 'enterprise') {
+      return NextResponse.json(
+        { success: false, error: 'Only enterprise users can create offerings.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const payload = toSpringPayload(body);
 
@@ -78,6 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      await ensureAuthSchema();
       const pool = getHomesMerryDbPool();
       await pool.query(
         `INSERT INTO product (
@@ -86,14 +97,16 @@ export async function POST(request: NextRequest) {
           gallery_images, additional_attributes, allowed_users, seo_keywords,
           finish_type, load_capacity, preferred_vendor, primary_material, secondary_material,
           restricted_region, gst_rate, price_unit, discount, lead_time, minimum_stock_level, reorder_quantity,
-          pricing_desc, short_desc, long_desc, inventory_sku_id, featured_offer, inventory_sync, procurement_pipeline, sales_module, visibility
+          pricing_desc, short_desc, long_desc, inventory_sku_id, featured_offer, inventory_sync, procurement_pipeline, sales_module, visibility,
+          created_by
         ) VALUES (
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, '[]', '["admin@example.com"]', ?,
           ?, ?, ?, ?, ?,
           'NONE', ?, ?, ?, ?, ?, ?,
-          'Standard pricing', ?, ?, ?, ?, 1, 1, 1, 1
+          'Standard pricing', ?, ?, ?, ?, 1, 1, 1, 1,
+          ?
         )`,
         [
           payload.offering_name,
@@ -123,6 +136,7 @@ export async function POST(request: NextRequest) {
           payload.long_desc,
           payload.sku_id,
           payload.featured_offer ? 1 : 0,
+          session.id,
         ]
       );
 

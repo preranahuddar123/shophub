@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
+import { getSessionFromRequest } from '@/lib/auth/server';
+import { ensureAuthSchema } from '@/lib/auth/ensure';
 
 function isPublishedRow(row: any): boolean {
   const value = row?.is_published;
@@ -38,6 +40,7 @@ function mapProductRow(row: any) {
     long_desc: row.long_desc || '',
     featured_offer: Boolean(row.featured_offer),
     is_published: isPublishedRow(row),
+    created_by: row.created_by ?? null,
     pricing: {
       selling_price: sellingPrice,
       cost_price: costPrice,
@@ -95,14 +98,25 @@ function mapProductRow(row: any) {
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureAuthSchema();
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+    }
+
     const { searchParams } = request.nextUrl;
     const id = searchParams.get('id');
     const pool = getHomesMerryDbPool();
+    const ownerWhere =
+      session.role === 'enterprise'
+        ? 'created_by = ?'
+        : 'CAST(is_published AS UNSIGNED) = 1';
+    const ownerParams = session.role === 'enterprise' ? [session.id] : [];
 
     if (id) {
       const [rows]: any = await pool.query(
-        'SELECT * FROM product WHERE prod_id = ? OR sku_id = ? LIMIT 1',
-        [id, id]
+        `SELECT * FROM product WHERE (prod_id = ? OR sku_id = ?) AND ${ownerWhere} LIMIT 1`,
+        [id, id, ...ownerParams]
       );
       const row = Array.isArray(rows) ? rows[0] : null;
       if (!row) {
@@ -115,15 +129,15 @@ export async function GET(request: NextRequest) {
     const size = Math.min(200, Math.max(1, Number(searchParams.get('size') || 50)));
     const offset = page * size;
 
-    const publishedWhere = 'CAST(is_published AS UNSIGNED) = 1';
     const [countRows]: any = await pool.query(
-      `SELECT COUNT(*) AS total FROM product WHERE ${publishedWhere}`
+      `SELECT COUNT(*) AS total FROM product WHERE ${ownerWhere}`,
+      ownerParams
     );
     const totalElements = Number(countRows?.[0]?.total ?? 0);
 
     const [rows]: any = await pool.query(
-      `SELECT * FROM product WHERE ${publishedWhere} ORDER BY prod_id DESC LIMIT ? OFFSET ?`,
-      [size, offset]
+      `SELECT * FROM product WHERE ${ownerWhere} ORDER BY prod_id DESC LIMIT ? OFFSET ?`,
+      [...ownerParams, size, offset]
     );
 
     const content = (Array.isArray(rows) ? rows : []).map(mapProductRow);
