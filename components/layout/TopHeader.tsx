@@ -31,7 +31,7 @@ export default function TopHeader({
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
+    <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-30">
       <div className="h-full px-6 flex items-center justify-between gap-6">
         {/* Left: Page Label */}
         <div className="flex items-center gap-4">

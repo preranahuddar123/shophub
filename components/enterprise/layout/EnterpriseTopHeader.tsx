@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 interface EnterpriseTopHeaderProps {
   title?: string;
@@ -15,6 +16,7 @@ export default function EnterpriseTopHeader({
   onSearchChange,
   onSearch,
 }: EnterpriseTopHeaderProps) {
+  const router = useRouter();
   return (
     <header className="bg-white border-b border-gray-200 h-16 fixed top-0 right-0 left-56 z-10">
       <div className="h-full px-6 flex items-center justify-between gap-6">
@@ -89,7 +91,7 @@ export default function EnterpriseTopHeader({
           </button>
 
           {/* Create Offering Button */}
-          <button className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-xs font-semibold hover:bg-gray-800 transition-colors shadow-xs">
+          <button onClick={() => router.push('/offerings/CreateOfferings')} className="flex items-center gap-2 bg-black text-white pl-3 pr-4 py-2 rounded-md text-xs font-semibold hover:bg-gray-800 transition-colors shadow-xs">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>

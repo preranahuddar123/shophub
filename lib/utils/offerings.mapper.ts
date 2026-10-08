@@ -10,6 +10,20 @@ import { OfferingResponse } from '../types/offerings/offering.types';
  * Map a Product from database or category API to OfferingResponse
  * Extracts available fields and provides sensible defaults for missing data
  */
+export function isLiveCatalogProduct(product: any): boolean {
+  const published = product?.is_published;
+  if (published !== true && published !== 1 && published !== '1') {
+    return false;
+  }
+  const status = String(
+    product?.internal?.visibility_status?.publishing_status ||
+      product?.publishing_status ||
+      product?.status ||
+      ''
+  ).toUpperCase();
+  return status !== 'DRAFT';
+}
+
 export function mapProductToOffering(
   product: Product,
   categoryName?: string,
@@ -198,6 +212,7 @@ export function extractAllOfferingsFromDatabase(
 
   // 1. First add direct products from database products table
   for (const product of products) {
+    if (!isLiveCatalogProduct(product)) continue;
     const pId = String(product.prodId || product.productId || product.sku_id || '');
     if (!pId) continue;
 
@@ -218,7 +233,7 @@ export function extractAllOfferingsFromDatabase(
     if (sec.products && Array.isArray(sec.products)) {
       for (const p of sec.products) {
         const pId = String(p.prodId || p.productId || p.sku_id || '');
-        if (pId && !productMap.has(pId)) {
+        if (pId && !productMap.has(pId) && isLiveCatalogProduct(p)) {
           const offering = mapProductToOffering(p, sec.secondaryCategoryName, sec.secondaryCategoryId);
           productMap.set(offering.prodId, offering);
         }
@@ -231,7 +246,7 @@ export function extractAllOfferingsFromDatabase(
     if (pri.products && Array.isArray(pri.products)) {
       for (const p of pri.products) {
         const pId = String(p.prodId || p.productId || p.sku_id || '');
-        if (pId && !productMap.has(pId)) {
+        if (pId && !productMap.has(pId) && isLiveCatalogProduct(p)) {
           const offering = mapProductToOffering(p, pri.primaryCategoryName, pri.primaryCategoryId);
           productMap.set(offering.prodId, offering);
         }

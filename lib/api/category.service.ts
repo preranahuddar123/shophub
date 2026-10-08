@@ -167,11 +167,19 @@ export const deleteSecondaryCategory = async (id: string | number): Promise<void
   }
 };
 
+function toApiError(error: any, fallback: string): ApiError {
+  return {
+    message: error.response?.data?.message || error.message || fallback,
+    status: error.response?.status,
+    code: error.response?.data?.code,
+  };
+}
+
 /**
  * Create a new primary category
  * POST /categories/createCategory
  */
-export const createPrimaryCategory = async (data: {)
+export const createPrimaryCategory = async (data: {
   primaryCategoryName: string;
   primaryCategoryDescription?: string;
   subCategory?: any[];
@@ -186,12 +194,7 @@ export const createPrimaryCategory = async (data: {)
     });
     return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    throw toApiError(error, 'Failed to create primary category');
   }
 };
 
@@ -217,12 +220,7 @@ export const updatePrimaryCategory = async (
     });
     return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to update primary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    throw toApiError(error, 'Failed to update primary category');
   }
 };
 
@@ -248,12 +246,7 @@ export const createSecondaryCategory = async (
     });
     return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    throw toApiError(error, 'Failed to create secondary category');
   }
 };
 
@@ -282,12 +275,7 @@ export const createSubCategory = async (
     );
     return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to create sub-category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    throw toApiError(error, 'Failed to create sub-category');
   }
 };
 
@@ -316,11 +304,6 @@ export const updateSecondaryCategory = async (
     );
     return response.data;
   } catch (error: any) {
-    const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'Failed to update secondary category',
-      status: error.response?.status,
-      code: error.response?.data?.code,
-    };
-    throw apiError;
+    throw toApiError(error, 'Failed to update secondary category');
   }
 };
