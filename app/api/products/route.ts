@@ -35,6 +35,7 @@ function mapProductRow(row: any) {
     sku_id: row.sku_id || row.sku || '',
     category: row.category || 'FURNITURE',
     brand: row.brand || '',
+    brand_id: row.brand_id ?? null,
     tags: Array.isArray(seoKeywords) ? seoKeywords : [],
     short_desc: row.short_desc || '',
     long_desc: row.long_desc || '',
@@ -70,6 +71,12 @@ function mapProductRow(row: any) {
       upload_draw: row.upload_draw || '',
     },
     specifications: {
+      physical_dimensions: {
+        length: Number(row.length_cm ?? 0),
+        width: Number(row.width_cm ?? 0),
+        height: Number(row.height_cm ?? 0),
+        weight: Number(row.weight_kg ?? 0),
+      },
       material_finish: {
         primary_material: row.primary_material || '',
         secondary_material: row.secondary_material || '',
@@ -81,6 +88,9 @@ function mapProductRow(row: any) {
       additional_attributes: Array.isArray(additionalAttributes) ? additionalAttributes : [],
     },
     seo: {
+      page_title: row.page_title || '',
+      meta_desc: row.meta_desc || '',
+      url_slug: row.url_slug || '',
       keywords: Array.isArray(seoKeywords) ? seoKeywords : [],
     },
     internal: {

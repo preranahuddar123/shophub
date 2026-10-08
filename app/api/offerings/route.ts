@@ -69,11 +69,14 @@ function localValues(payload: any, sessionId: number) {
   };
 }
 
-async function trySpring(path: string, payload: any) {
+async function trySpring(path: string, payload: any, method = 'POST') {
   try {
+    const token = process.env.NEXT_PUBLIC_API_BEARER_TOKEN;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
     const springRes = await fetch(`${SPRING_BOOT_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method,
+      headers,
       body: JSON.stringify(payload),
     });
     const springText = await springRes.text();
@@ -190,6 +193,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const row = localValues(payload, session.id);
+    const spring = await trySpring(`/products/updateProduct/${prodId}`, payload, 'PUT');
+
     await pool.query(
       `UPDATE product SET
         offering_name=?, offering_type=?, sku_id=?, category=?, brand=?, current_stock=?,
@@ -218,6 +223,7 @@ export async function PUT(request: NextRequest) {
         ? `Offering "${payload.offering_name}" updated and published`
         : `Draft "${payload.offering_name}" updated`,
       prodId,
+      spring,
     });
   } catch (error: any) {
     console.error('[API /api/offerings PUT]', error);

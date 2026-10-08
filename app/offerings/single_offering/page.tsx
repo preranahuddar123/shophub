@@ -54,6 +54,7 @@ function SingleOfferingContent() {
             isLoading={isLoading}
             error={error}
             onRefresh={refetch}
+            fallbackProdId={prodId}
           />
         )}
       </main>

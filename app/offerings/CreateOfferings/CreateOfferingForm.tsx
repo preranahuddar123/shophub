@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createProduct } from '@/lib/api/product.service';
+import RichTextEditor from './RichTextEditor';
 
 type TabId = 'GENERAL' | 'PRICING' | 'INVENTORY' | 'MEDIA' | 'SPECIFICATIONS' | 'SEO' | 'INTERNAL';
 
@@ -15,6 +16,60 @@ const labelCls =
 const inputCls =
   'w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300';
 const cardCls = 'bg-[#F6F7F8] rounded-2xl p-6 space-y-5';
+const noSpinner =
+  ' [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+function NumberEntry({
+  value,
+  onChange,
+  suffix,
+  step = 1,
+}: {
+  value: number | string;
+  onChange: (value: number) => void;
+  suffix?: string;
+  step?: number;
+}) {
+  const numeric = Number(value) || 0;
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="decimal"
+        className={`${inputCls} pr-12${noSpinner}`}
+        value={value === 0 || value === '0' ? '' : String(value)}
+        placeholder="0"
+        onChange={(e) => {
+          const raw = e.target.value.replace(/[^\d.]/g, '');
+          if (raw === '' || raw === '.') {
+            onChange(0);
+            return;
+          }
+          onChange(Number(raw));
+        }}
+      />
+      {suffix && <span className="pointer-events-none absolute right-9 top-2.5 text-sm text-gray-400">{suffix}</span>}
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col">
+        <button
+          type="button"
+          className="h-4 w-6 grid place-items-center text-[9px] text-gray-500 hover:text-gray-900"
+          onClick={() => onChange(numeric + step)}
+          aria-label="Increase"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="h-4 w-6 grid place-items-center text-[9px] text-gray-500 hover:text-gray-900"
+          onClick={() => onChange(Math.max(0, numeric - step))}
+          aria-label="Decrease"
+        >
+          ▼
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function slugify(value: string) {
   return value
@@ -151,6 +206,14 @@ export default function CreateOfferingForm() {
             : prev.gallery_images,
           video_link: product.media?.video_link || '',
           image_360: product.media?.image_360 || '',
+          length_cm: Number(product.specifications?.physical_dimensions?.length) || 0,
+          width_cm: Number(product.specifications?.physical_dimensions?.width) || 0,
+          height_cm: Number(product.specifications?.physical_dimensions?.height) || 0,
+          weight_kg: Number(product.specifications?.physical_dimensions?.weight) || 0,
+          primary_material: product.specifications?.material_finish?.primary_material || prev.primary_material,
+          secondary_material: product.specifications?.material_finish?.secondary_material || prev.secondary_material,
+          finish_type: product.specifications?.material_finish?.finish_type || prev.finish_type,
+          load_capacity: product.specifications?.technical_properties?.load_capacity || prev.load_capacity,
           page_title: product.seo?.page_title || product.offering_name || '',
           meta_desc: product.seo?.meta_desc || '',
           url_slug: product.seo?.url_slug || '',
@@ -536,22 +599,11 @@ export default function CreateOfferingForm() {
               </div>
               <div>
                 <label className={labelCls}>Long Description (Rich Text)</label>
-                <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-                  <div className="flex gap-3 border-b border-gray-100 px-3 py-2 text-gray-500 text-sm">
-                    <span className="font-bold">B</span>
-                    <span className="italic">I</span>
-                    <span>☰</span>
-                    <span>🔗</span>
-                    <span>🖼</span>
-                  </div>
-                  <textarea
-                    rows={6}
-                    className="w-full px-3.5 py-3 text-sm outline-none resize-y"
-                    placeholder="Detailed product narrative, features, and specifications..."
-                    value={form.long_desc}
-                    onChange={(e) => setField('long_desc', e.target.value)}
-                  />
-                </div>
+                <RichTextEditor
+                  value={form.long_desc}
+                  onChange={(html) => setField('long_desc', html)}
+                  placeholder="Detailed product narrative, features, and specifications..."
+                />
               </div>
             </section>
 
@@ -581,18 +633,15 @@ export default function CreateOfferingForm() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Cost Price</label>
-                  <input type="number" min="0" className={inputCls} value={form.cost_price} onChange={(e) => setField('cost_price', Number(e.target.value))} />
+                  <NumberEntry value={form.cost_price} onChange={(value) => setField('cost_price', value)} />
                 </div>
                 <div>
                   <label className={labelCls}>Selling Price (MSRP)</label>
-                  <input type="number" min="0" className={inputCls} value={form.selling_price} onChange={(e) => setField('selling_price', Number(e.target.value))} />
+                  <NumberEntry value={form.selling_price} onChange={(value) => setField('selling_price', value)} />
                 </div>
                 <div>
                   <label className={labelCls}>Discount (%)</label>
-                  <div className="relative">
-                    <input type="number" min="0" className={inputCls} value={form.discount} onChange={(e) => setField('discount', Number(e.target.value))} />
-                    <span className="absolute right-3 top-2.5 text-sm text-gray-400">%</span>
-                  </div>
+                  <NumberEntry value={form.discount} suffix="%" onChange={(value) => setField('discount', value)} />
                 </div>
                 <div>
                   <label className={labelCls}>GST / Tax</label>
