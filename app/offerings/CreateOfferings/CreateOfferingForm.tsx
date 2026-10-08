@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createProduct } from '@/lib/api/product.service';
 
 type TabId = 'GENERAL' | 'PRICING' | 'INVENTORY' | 'MEDIA' | 'SPECIFICATIONS' | 'SEO' | 'INTERNAL';
@@ -30,6 +30,7 @@ function formatTime(date: Date) {
 
 export default function CreateOfferingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>('GENERAL');
   const [brands, setBrands] = useState<{ brand_id: number; brand_name: string }[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -39,7 +40,10 @@ export default function CreateOfferingForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [prodId, setProdId] = useState<number | null>(null);
+  const [isPublished, setIsPublished] = useState(false);
   const primaryImageRef = useRef<HTMLInputElement>(null);
+  const tabIndex = TABS.indexOf(tab);
 
   const [form, setForm] = useState({
     offering_name: '',
@@ -110,6 +114,55 @@ export default function CreateOfferingForm() {
   }, []);
 
   useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id) return;
+    fetch(`/api/products?id=${encodeURIComponent(id)}`, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((product) => {
+        if (!product?.offering_name && product?.prodId == null) return;
+        setProdId(Number(product.prodId));
+        setIsPublished(Boolean(product.is_published));
+        setForm((prev) => ({
+          ...prev,
+          offering_name: product.offering_name || '',
+          offering_type: product.offering_type || 'PRODUCT',
+          sku_id: product.sku_id || '',
+          category: product.category || 'FURNITURE',
+          brand: product.brand || prev.brand,
+          brand_id: product.brand_id || prev.brand_id,
+          tags: Array.isArray(product.tags) ? product.tags : prev.tags,
+          short_desc: product.short_desc || '',
+          long_desc: product.long_desc || '',
+          featured_offer: Boolean(product.featured_offer),
+          cost_price: Number(product.pricing?.cost_price) || 0,
+          selling_price: Number(product.pricing?.selling_price) || 0,
+          discount: Number(product.pricing?.discount) || 0,
+          gst_rate: product.pricing?.gst_rate || 'GST_18',
+          units: product.pricing?.units || 'PER_PIECE',
+          pricing_desc: product.pricing?.desc || '',
+          current_stock: Number(product.inventory?.current_stock) || 0,
+          minimum_stock_level: String(product.inventory?.minimum_stock_level ?? ''),
+          reorder_quantity: String(product.inventory?.reorder_quantity ?? ''),
+          preferred_vendor: product.inventory?.sourcingLogistics?.preferred_vendor || 'IN_HOUSE',
+          lead_time: Number(product.inventory?.sourcingLogistics?.lead_time) || 7,
+          primary_image: product.media?.primary_image || '',
+          gallery_images: Array.isArray(product.media?.gallery_images) && product.media.gallery_images.length
+            ? [...product.media.gallery_images, '', '', '', ''].slice(0, 4)
+            : prev.gallery_images,
+          video_link: product.media?.video_link || '',
+          image_360: product.media?.image_360 || '',
+          page_title: product.seo?.page_title || product.offering_name || '',
+          meta_desc: product.seo?.meta_desc || '',
+          url_slug: product.seo?.url_slug || '',
+          keywords: Array.isArray(product.seo?.keywords) ? product.seo.keywords : prev.keywords,
+          publishing_status: product.internal?.visibility_status?.publishing_status || 'DRAFT',
+          allowed_users: product.internal?.access_permissions?.allowed_users || prev.allowed_users,
+        }));
+      })
+      .catch(() => undefined);
+  }, [searchParams]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
         window.localStorage.setItem('shophub.createOffering.draft', JSON.stringify(form));
@@ -130,6 +183,26 @@ export default function CreateOfferingForm() {
     const discounted = form.selling_price * (1 - Number(form.discount || 0) / 100);
     return discounted - form.cost_price;
   }, [form.cost_price, form.selling_price, form.discount]);
+
+  const incomplete = useMemo(() => {
+    const items: { tab: TabId; label: string }[] = [];
+    if (!form.offering_name.trim()) items.push({ tab: 'GENERAL', label: 'Offering name' });
+    if (!form.sku_id.trim()) items.push({ tab: 'GENERAL', label: 'SKU' });
+    if (!form.short_desc.trim()) items.push({ tab: 'GENERAL', label: 'Short description' });
+    if (!form.long_desc.trim()) items.push({ tab: 'GENERAL', label: 'Long description' });
+    if (!Number(form.selling_price)) items.push({ tab: 'PRICING', label: 'Selling price' });
+    if (!Number(form.cost_price)) items.push({ tab: 'PRICING', label: 'Cost price' });
+    if (!form.pricing_desc.trim()) items.push({ tab: 'PRICING', label: 'Pricing notes' });
+    if (form.current_stock === 0 && form.minimum_stock_level === '') items.push({ tab: 'INVENTORY', label: 'Stock levels' });
+    if (!form.primary_image.trim()) items.push({ tab: 'MEDIA', label: 'Primary image' });
+    if (!Number(form.length_cm) && !Number(form.width_cm) && !Number(form.height_cm)) {
+      items.push({ tab: 'SPECIFICATIONS', label: 'Dimensions' });
+    }
+    if (!form.page_title.trim()) items.push({ tab: 'SEO', label: 'Page title' });
+    if (!form.meta_desc.trim()) items.push({ tab: 'SEO', label: 'Meta description' });
+    if (!form.url_slug.trim()) items.push({ tab: 'SEO', label: 'URL slug' });
+    return items;
+  }, [form]);
 
   const setField = (key: keyof typeof form, value: any) => {
     setForm((prev) => {
@@ -250,7 +323,7 @@ export default function CreateOfferingForm() {
 
   const submit = async (publish: boolean) => {
     if (!form.offering_name.trim() || !form.sku_id.trim()) {
-      setError('Offering name and SKU are required.');
+      setError('Offering name and SKU are required before you can save.');
       setTab('GENERAL');
       return;
     }
@@ -258,28 +331,51 @@ export default function CreateOfferingForm() {
     setError(null);
     setSuccess(null);
     try {
-      await createProduct(buildPayload(publish));
+      const data = await createProduct(buildPayload(publish), prodId);
+      const savedId = Number(data.prodId || prodId);
+      if (savedId) {
+        setProdId(savedId);
+        router.replace(`/offerings/CreateOfferings?id=${savedId}`);
+      }
+      setIsPublished(publish || isPublished);
+      const missing = incomplete.filter((item) => item.label !== 'Offering name' && item.label !== 'SKU');
       if (publish) {
-        router.push('/offerings');
+        setSuccess(
+          missing.length
+            ? `Published. ${missing.length} field${missing.length === 1 ? '' : 's'} still need updates — fill them and click Update Offering.`
+            : 'This offering is live. You can keep editing and save updates anytime.'
+        );
       } else {
-        setSuccess('Draft saved in the database with is_published=false. It will not appear in Master Catalog or Client Offerings until you publish.');
+        setSuccess('Draft saved. It will not appear in Master Catalog or Client Offerings until you publish.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to create offering');
+      setError(err.message || 'Failed to save offering');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const goNext = () => {
+    if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1]);
+  };
+
+  const goBack = () => {
+    if (tabIndex > 0) setTab(TABS[tabIndex - 1]);
   };
 
   return (
     <div className="pb-28">
       <div className="mx-auto w-full max-w-5xl px-10 pt-8 pb-2">
         <p className="text-[10px] font-semibold tracking-[0.18em] text-gray-400 uppercase">
-          Offerings <span className="mx-1.5 text-gray-300">›</span> New Entry
+          Offerings <span className="mx-1.5 text-gray-300">›</span> {prodId ? 'Edit' : 'New Entry'}
         </p>
-        <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-950">Create Offering</h1>
+        <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-950">
+          {prodId ? 'Update Offering' : 'Create Offering'}
+        </h1>
         <p className="mt-2 text-sm text-gray-500">
-          Set up a new product, service, or bundle for the master catalog.
+          {isPublished
+            ? 'This offering is live. Fill any missing details below and save an update.'
+            : 'Use Next to move through each section, or publish from any step. Save Draft keeps it off the live catalog.'}
         </p>
       </div>
 
@@ -302,19 +398,30 @@ export default function CreateOfferingForm() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-5xl px-10">
-      {error && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {success}
+      {(success || error) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => { setSuccess(null); setError(null); }}>
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className={`text-sm font-bold ${error ? 'text-red-700' : 'text-emerald-700'}`}>
+              {error ? 'Could not save' : isPublished ? 'Offering published' : 'Draft saved'}
+            </p>
+            <p className="mt-2 text-sm text-gray-600">{error || success}</p>
+            <button
+              type="button"
+              onClick={() => { setSuccess(null); setError(null); }}
+              className="mt-5 w-full rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="mt-6 space-y-5">
+      <div className="mx-auto w-full max-w-6xl px-10">
+      <div className="mt-6 flex items-start gap-6">
+      <div className="min-w-0 flex-1 space-y-5">
         {tab === 'GENERAL' && (
           <>
             <section className={cardCls}>
@@ -998,34 +1105,73 @@ export default function CreateOfferingForm() {
           </>
         )}
       </div>
+      {prodId && incomplete.length > 0 && (
+        <aside className="w-64 shrink-0 sticky top-36 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
+            Not updated yet
+          </p>
+          <p className="mt-1 text-[11px] text-amber-800">{incomplete.length} fields remaining</p>
+          <div className="mt-3 space-y-1.5">
+            {incomplete.map((item) => (
+              <button
+                key={`${item.tab}-${item.label}`}
+                type="button"
+                onClick={() => setTab(item.tab)}
+                className="block w-full rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-left text-[11px] font-semibold text-amber-900 hover:border-amber-400"
+              >
+                {item.label}
+                <span className="block text-[10px] font-medium text-amber-700">{item.tab}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+      </div>
       </div>
 
       <div className="fixed bottom-0 right-0 left-56 z-20 border-t border-gray-200 bg-white">
-      <div className="mx-auto w-full max-w-5xl px-10 py-3 flex items-center justify-between">
-        <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">
-          View Reports
-          <span>→</span>
-        </button>
-        <div className="flex items-center gap-4">
-          {savedAt && <p className="text-xs text-emerald-600">Draft autosaved at {savedAt}</p>}
+      <div className="mx-auto w-full max-w-5xl px-10 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={isSubmitting}
-            onClick={() => submit(false)}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-800 disabled:opacity-50"
+            onClick={goBack}
+            disabled={tabIndex === 0}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-40"
           >
-            Save Draft
+            Back
           </button>
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={tabIndex === TABS.length - 1}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-800 disabled:opacity-40"
+          >
+            Next
+            <span>→</span>
+          </button>
+          <span className="hidden sm:inline text-[11px] text-gray-400">
+            {tabIndex + 1} / {TABS.length} {tab}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {savedAt && <p className="hidden md:block text-xs text-emerald-600">Autosaved {savedAt}</p>}
+          {!isPublished && (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => submit(false)}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-800 disabled:opacity-50"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Draft'}
+            </button>
+          )}
           <button
             type="button"
             disabled={isSubmitting}
             onClick={() => submit(true)}
             className="inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
           >
-            {isSubmitting ? 'Publishing...' : 'Publish Offering'}
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
+            {isSubmitting ? 'Saving...' : isPublished ? 'Update' : 'Publish Offering'}
           </button>
         </div>
       </div>

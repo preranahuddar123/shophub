@@ -27,43 +27,55 @@ function toSpringPayload(body: any) {
   };
 }
 
-export async function POST(request: NextRequest) {
+function localValues(payload: any, sessionId: number) {
+  return {
+    offering_name: payload.offering_name,
+    offering_type: payload.offering_type,
+    sku_id: payload.sku_id,
+    category: payload.category,
+    brand: payload.brand || '',
+    current_stock: Number(payload.inventory?.current_stock) || 0,
+    selling_price: Number(payload.pricing?.selling_price) || 0,
+    cost_price: Number(payload.pricing?.cost_price) || 0,
+    is_published: payload.is_published ? 1 : 0,
+    publishing_status: payload.is_published ? 'PUBLISHED' : 'DRAFT',
+    gallery_images: JSON.stringify(payload.media?.gallery_images || []),
+    seo_keywords: JSON.stringify(payload.seo?.keywords || payload.tags || []),
+    finish_type: payload.specifications?.material_finish?.finish_type || 'MATTE',
+    load_capacity: payload.specifications?.technical_properties?.load_capacity || 'UP_TO_200_KG',
+    preferred_vendor: payload.inventory?.sourcingLogistics?.preferred_vendor || '',
+    primary_material: payload.specifications?.material_finish?.primary_material || 'SOLID_WOOD',
+    secondary_material: payload.specifications?.material_finish?.secondary_material || '',
+    gst_rate: payload.pricing?.gst_rate || 'GST_18',
+    price_unit: payload.pricing?.units || 'PER_PIECE',
+    discount: Number(payload.pricing?.discount) || 0,
+    lead_time: Number(payload.inventory?.sourcingLogistics?.lead_time) || 0,
+    minimum_stock_level: Number(payload.inventory?.minimum_stock_level) || 0,
+    reorder_quantity: Number(payload.inventory?.reorder_quantity) || 0,
+    short_desc: payload.short_desc,
+    long_desc: payload.long_desc,
+    featured_offer: payload.featured_offer ? 1 : 0,
+    primary_image: payload.media?.primary_image || '',
+    page_title: payload.seo?.page_title || payload.offering_name,
+    meta_desc: payload.seo?.meta_desc || payload.short_desc || '',
+    url_slug: payload.seo?.url_slug || '',
+    video_link: payload.media?.video_link || '',
+    image_360: payload.media?.image_360 || '',
+    length_cm: Number(payload.specifications?.physical_dimensions?.length) || 0,
+    width_cm: Number(payload.specifications?.physical_dimensions?.width) || 0,
+    height_cm: Number(payload.specifications?.physical_dimensions?.height) || 0,
+    weight_kg: Number(payload.specifications?.physical_dimensions?.weight) || 0,
+    created_by: sessionId,
+  };
+}
+
+async function trySpring(path: string, payload: any) {
   try {
-    const session = getSessionFromRequest(request);
-    if (!session || session.role !== 'enterprise') {
-      return NextResponse.json(
-        { success: false, error: 'Only enterprise users can create offerings.' },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    const payload = toSpringPayload(body);
-
-    if (!payload.offering_name || !payload.sku_id) {
-      return NextResponse.json(
-        { success: false, error: 'offering_name and sku_id are required.' },
-        { status: 400 }
-      );
-    }
-
-    let springRes: Response;
-    try {
-      springRes = await fetch(`${SPRING_BOOT_BASE_URL}/products/createProduct`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    } catch (err: any) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Cannot reach ${SPRING_BOOT_BASE_URL}/products/createProduct (${err?.cause?.code || err.message}). Start Spring Boot on port 8080.`,
-        },
-        { status: 502 }
-      );
-    }
-
+    const springRes = await fetch(`${SPRING_BOOT_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     const springText = await springRes.text();
     let springJson: any = null;
     try {
@@ -71,94 +83,146 @@ export async function POST(request: NextRequest) {
     } catch {
       springJson = { raw: springText };
     }
+    return { ok: springRes.ok, status: springRes.status, data: springJson };
+  } catch (err: any) {
+    return { ok: false, status: 502, data: { error: err.message } };
+  }
+}
 
-    if (!springRes.ok) {
+function requireCatalogUser(request: NextRequest) {
+  const session = getSessionFromRequest(request);
+  if (!session || (session.role !== 'enterprise' && session.role !== 'admin')) {
+    return { error: NextResponse.json({ success: false, error: 'Only admin or enterprise users can manage offerings.' }, { status: 403 }) };
+  }
+  return { session };
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const auth = requireCatalogUser(request);
+    if ('error' in auth && auth.error) return auth.error;
+    const session = auth.session!;
+
+    const body = await request.json();
+    const payload = toSpringPayload(body);
+    if (!payload.offering_name || !payload.sku_id) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            springJson?.message ||
-            springJson?.error ||
-            `Spring createProduct failed (${springRes.status})`,
-          status: springRes.status,
-          details: springJson,
-        },
-        { status: springRes.status }
+        { success: false, error: 'offering_name and sku_id are required.' },
+        { status: 400 }
       );
     }
 
-    try {
-      await ensureAuthSchema();
-      const pool = getHomesMerryDbPool();
-      await pool.query(
-        `INSERT INTO product (
-          offering_name, offering_type, sku_id, category, brand, current_stock,
-          selling_price, cost_price, is_published, publishing_status,
-          gallery_images, additional_attributes, allowed_users, seo_keywords,
-          finish_type, load_capacity, preferred_vendor, primary_material, secondary_material,
-          restricted_region, gst_rate, price_unit, discount, lead_time, minimum_stock_level, reorder_quantity,
-          pricing_desc, short_desc, long_desc, inventory_sku_id, featured_offer, inventory_sync, procurement_pipeline, sales_module, visibility,
-          created_by
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?,
-          ?, '[]', '["admin@example.com"]', ?,
-          ?, ?, ?, ?, ?,
-          'NONE', ?, ?, ?, ?, ?, ?,
-          'Standard pricing', ?, ?, ?, ?, 1, 1, 1, 1,
-          ?
-        )`,
-        [
-          payload.offering_name,
-          payload.offering_type,
-          payload.sku_id,
-          payload.category,
-          payload.brand || '',
-          Number(payload.inventory?.current_stock) || 0,
-          Number(payload.pricing?.selling_price) || 0,
-          Number(payload.pricing?.cost_price) || 0,
-          payload.is_published ? 1 : 0,
-          payload.is_published ? 'PUBLISHED' : 'DRAFT',
-          JSON.stringify(payload.media?.gallery_images || []),
-          JSON.stringify(payload.seo?.keywords || payload.tags || []),
-          payload.specifications?.material_finish?.finish_type || 'MATTE',
-          payload.specifications?.technical_properties?.load_capacity || 'UP_TO_200_KG',
-          payload.inventory?.sourcingLogistics?.preferred_vendor || '',
-          payload.specifications?.material_finish?.primary_material || 'SOLID_WOOD',
-          payload.specifications?.material_finish?.secondary_material || '',
-          payload.pricing?.gst_rate || 'GST_18',
-          payload.pricing?.units || 'PER_PIECE',
-          Number(payload.pricing?.discount) || 0,
-          Number(payload.inventory?.sourcingLogistics?.lead_time) || 0,
-          Number(payload.inventory?.minimum_stock_level) || 0,
-          Number(payload.inventory?.reorder_quantity) || 0,
-          payload.short_desc,
-          payload.long_desc,
-          payload.sku_id,
-          payload.featured_offer ? 1 : 0,
-          session.id,
-        ]
-      );
+    const spring = await trySpring('/products/createProduct', payload);
+    await ensureAuthSchema();
+    const pool = getHomesMerryDbPool();
+    const row = localValues(payload, session.id);
 
-      if (payload.brand) {
-        await pool.query(
-          `UPDATE brands SET offerings_count = offerings_count + 1 WHERE brand_name = ?`,
-          [payload.brand]
-        );
-      }
-    } catch (dbErr: any) {
-      console.warn('[API /api/offerings POST] Local catalog insert skipped:', dbErr?.message);
+    const [result]: any = await pool.query(
+      `INSERT INTO product (
+        offering_name, offering_type, sku_id, category, brand, current_stock,
+        selling_price, cost_price, is_published, publishing_status,
+        gallery_images, additional_attributes, allowed_users, seo_keywords,
+        finish_type, load_capacity, preferred_vendor, primary_material, secondary_material,
+        restricted_region, gst_rate, price_unit, discount, lead_time, minimum_stock_level, reorder_quantity,
+        pricing_desc, short_desc, long_desc, inventory_sku_id, featured_offer, inventory_sync, procurement_pipeline, sales_module, visibility,
+        created_by, primary_image, page_title, meta_desc, url_slug, video_link, image_360, length_cm, width_cm, height_cm, weight_kg
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, '[]', ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, 1, 1, 1, 1,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )`,
+      [
+        row.offering_name, row.offering_type, row.sku_id, row.category, row.brand, row.current_stock,
+        row.selling_price, row.cost_price, row.is_published, row.publishing_status,
+        row.gallery_images, JSON.stringify(payload.internal?.access_permissions?.allowed_users || ['admin@example.com']), row.seo_keywords,
+        row.finish_type, row.load_capacity, row.preferred_vendor, row.primary_material, row.secondary_material,
+        payload.internal?.access_permissions?.restricted_region || 'NONE', row.gst_rate, row.price_unit, row.discount, row.lead_time, row.minimum_stock_level, row.reorder_quantity,
+        payload.pricing?.desc || 'Standard pricing', row.short_desc, row.long_desc, payload.sku_id, row.featured_offer,
+        row.created_by, row.primary_image, row.page_title, row.meta_desc, row.url_slug, row.video_link, row.image_360, row.length_cm, row.width_cm, row.height_cm, row.weight_kg,
+      ]
+    );
+
+    if (payload.brand) {
+      await pool.query(`UPDATE brands SET offerings_count = offerings_count + 1 WHERE brand_name = ?`, [payload.brand]).catch(() => undefined);
     }
 
     return NextResponse.json({
       success: true,
-      message: `Offering "${payload.offering_name}" created`,
-      product: springJson,
+      message: payload.is_published
+        ? `Offering "${payload.offering_name}" published`
+        : `Draft "${payload.offering_name}" saved`,
+      prodId: result?.insertId,
+      spring,
     });
   } catch (error: any) {
-    console.error('[API /api/offerings POST] Error creating offering:', error);
+    console.error('[API /api/offerings POST]', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to create offering' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = requireCatalogUser(request);
+    if ('error' in auth && auth.error) return auth.error;
+    const session = auth.session!;
+
+    const body = await request.json();
+    const prodId = Number(body.prodId || body.prod_id);
+    if (!prodId) {
+      return NextResponse.json({ success: false, error: 'prodId is required to update.' }, { status: 400 });
+    }
+
+    const payload = toSpringPayload(body);
+    await ensureAuthSchema();
+    const pool = getHomesMerryDbPool();
+    const ownerSql = session.role === 'admin' ? 'prod_id = ?' : 'prod_id = ? AND created_by = ?';
+    const ownerParams = session.role === 'admin' ? [prodId] : [prodId, session.id];
+    const [existing]: any = await pool.query(`SELECT prod_id FROM product WHERE ${ownerSql} LIMIT 1`, ownerParams);
+    if (!Array.isArray(existing) || !existing[0]) {
+      return NextResponse.json({ success: false, error: 'Offering not found.' }, { status: 404 });
+    }
+
+    const row = localValues(payload, session.id);
+    await pool.query(
+      `UPDATE product SET
+        offering_name=?, offering_type=?, sku_id=?, category=?, brand=?, current_stock=?,
+        selling_price=?, cost_price=?, is_published=?, publishing_status=?,
+        gallery_images=?, allowed_users=?, seo_keywords=?,
+        finish_type=?, load_capacity=?, preferred_vendor=?, primary_material=?, secondary_material=?,
+        gst_rate=?, price_unit=?, discount=?, lead_time=?, minimum_stock_level=?, reorder_quantity=?,
+        short_desc=?, long_desc=?, featured_offer=?, primary_image=?, page_title=?, meta_desc=?, url_slug=?,
+        video_link=?, image_360=?, length_cm=?, width_cm=?, height_cm=?, weight_kg=?
+      WHERE prod_id=?`,
+      [
+        row.offering_name, row.offering_type, row.sku_id, row.category, row.brand, row.current_stock,
+        row.selling_price, row.cost_price, row.is_published, row.publishing_status,
+        row.gallery_images, JSON.stringify(payload.internal?.access_permissions?.allowed_users || []), row.seo_keywords,
+        row.finish_type, row.load_capacity, row.preferred_vendor, row.primary_material, row.secondary_material,
+        row.gst_rate, row.price_unit, row.discount, row.lead_time, row.minimum_stock_level, row.reorder_quantity,
+        row.short_desc, row.long_desc, row.featured_offer, row.primary_image, row.page_title, row.meta_desc, row.url_slug,
+        row.video_link, row.image_360, row.length_cm, row.width_cm, row.height_cm, row.weight_kg,
+        prodId,
+      ]
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: payload.is_published
+        ? `Offering "${payload.offering_name}" updated and published`
+        : `Draft "${payload.offering_name}" updated`,
+      prodId,
+    });
+  } catch (error: any) {
+    console.error('[API /api/offerings PUT]', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to update offering' },
       { status: 500 }
     );
   }

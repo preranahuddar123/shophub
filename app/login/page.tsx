@@ -1,30 +1,15 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import type { PortalRole } from '@/lib/auth/session';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [role, setRole] = useState<PortalRole>('enterprise');
-  const [email, setEmail] = useState('enterprise@hubinterior.com');
-  const [password, setPassword] = useState('Enterprise@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  function switchRole(next: PortalRole) {
-    setRole(next);
-    setError(null);
-    if (next === 'enterprise') {
-      setEmail('enterprise@hubinterior.com');
-      setPassword('Enterprise@123');
-    } else {
-      setEmail('client@hubinterior.com');
-      setPassword('Client@123');
-    }
-  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -34,7 +19,7 @@ function LoginForm() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await response.json();
       if (!response.ok || !data?.success) {
@@ -42,9 +27,9 @@ function LoginForm() {
       }
       const next = searchParams.get('next');
       const allowedNext =
-        data.user.role === 'enterprise'
-          ? next && !next.startsWith('/client') && next !== '/'
-          : next && (next.startsWith('/client') || next === '/');
+        data.user.role === 'client'
+          ? next && (next.startsWith('/client') || next === '/')
+          : next && !next.startsWith('/client') && next !== '/';
       router.replace(allowedNext && next ? next : data.redirect);
       router.refresh();
     } catch (err: any) {
@@ -73,13 +58,14 @@ function LoginForm() {
             </div>
           </div>
           <h1 className="mt-16 text-4xl font-extrabold tracking-tight leading-tight">
-            One login for the catalog you own
-            <span className="block text-gray-400 font-semibold mt-3 text-xl">and the portal your clients use.</span>
+            Sign in with your account
+            <span className="block text-gray-400 font-semibold mt-3 text-xl">
+              We’ll open the workspace that matches your role.
+            </span>
           </h1>
         </div>
         <p className="text-sm text-gray-400 max-w-md">
-          Enterprise users land on Master Catalog with only the products they created.
-          Clients open the Hub portal to browse published offerings.
+          Admin and enterprise accounts open Master Catalog. Client accounts open the Hub portal.
         </p>
       </aside>
 
@@ -87,22 +73,7 @@ function LoginForm() {
         <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-3xl border border-black/5 shadow-sm p-8">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Sign in</p>
           <h2 className="mt-2 text-2xl font-extrabold text-gray-950">Welcome back</h2>
-          <p className="mt-1 text-sm text-gray-500">Choose your workspace, then continue with your account.</p>
-
-          <div className="mt-6 grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl">
-            {(['enterprise', 'client'] as PortalRole[]).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => switchRole(item)}
-                className={`py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
-                  role === item ? 'bg-black text-white' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+          <p className="mt-1 text-sm text-gray-500">Enter your email and password to continue.</p>
 
           <label className="block mt-6 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
             Email
@@ -110,6 +81,7 @@ function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
               className="mt-1.5 w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900"
               autoComplete="username"
               required
@@ -122,6 +94,7 @@ function LoginForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
               className="mt-1.5 w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900"
               autoComplete="current-password"
               required
@@ -137,13 +110,8 @@ function LoginForm() {
             disabled={loading}
             className="mt-6 w-full rounded-lg bg-black text-white text-sm font-semibold py-3 disabled:opacity-50"
           >
-            {loading ? 'Signing in...' : role === 'enterprise' ? 'Enter Master Catalog' : 'Enter Client Portal'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
-
-          <div className="mt-5 text-xs text-gray-500 space-y-1">
-            <p>Enterprise demo: enterprise@hubinterior.com / Enterprise@123</p>
-            <p>Client demo: client@hubinterior.com / Client@123</p>
-          </div>
         </form>
       </main>
     </div>

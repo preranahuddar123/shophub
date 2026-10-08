@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser } from '@/lib/auth/server';
-import { redirectForRole, SESSION_COOKIE, sessionCookieOptions, type PortalRole } from '@/lib/auth/session';
+import { redirectForRole, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const email = String(body.email || '').trim();
     const password = String(body.password || '');
-    const role = body.role === 'client' ? 'client' : body.role === 'enterprise' ? 'enterprise' : null;
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       return NextResponse.json(
-        { success: false, error: 'Email, password, and role are required.' },
+        { success: false, error: 'Email and password are required.' },
         { status: 400 }
       );
     }
 
-    const { session, token } = await authenticateUser(email, password, role as PortalRole);
+    const { session, token } = await authenticateUser(email, password);
     const response = NextResponse.json({
       success: true,
       user: session,

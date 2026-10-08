@@ -108,9 +108,11 @@ export async function GET(request: NextRequest) {
     const id = searchParams.get('id');
     const pool = getHomesMerryDbPool();
     const ownerWhere =
-      session.role === 'enterprise'
-        ? 'created_by = ?'
-        : 'CAST(is_published AS UNSIGNED) = 1';
+      session.role === 'admin'
+        ? '1 = 1'
+        : session.role === 'enterprise'
+          ? 'created_by = ?'
+          : 'CAST(is_published AS UNSIGNED) = 1';
     const ownerParams = session.role === 'enterprise' ? [session.id] : [];
 
     if (id) {

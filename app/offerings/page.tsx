@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
+import CatalogWelcome from '@/components/layout/CatalogWelcome';
 import OfferingFilters from '@/components/offerings/OfferingFilters';
 import OfferingTable from '@/components/offerings/OfferingTable';
 import Pagination from '@/components/offerings/Pagination';
@@ -56,14 +57,15 @@ export default function OfferingsPage() {
           {/* ===================================================================== */}
           {/* MASTER CATALOG HEADER (Matching UI Reference) */}
           {/* ===================================================================== */}
-          <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
+          <div className="mb-6 flex items-end justify-between flex-wrap gap-4">
             <div>
+              <CatalogWelcome />
               <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">
                 MASTER CATALOG
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
                 All Offerings
-              </h1>
+              </h2>
             </div>
 
             {/* Right Side Tools: View Switchers & Export/Import */}
