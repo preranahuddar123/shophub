@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server';
+import { authenticateUser } from '@/lib/auth/account';
 import { redirectForRole, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
