@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
-import QuoteTopNav from '@/components/quote-engine/QuoteTopNav';
+import TopHeader from '@/components/layout/TopHeader';
 import QuoteContextSidebar from '@/components/quote-engine/QuoteContextSidebar';
 import QuoteCatalogSection, { CatalogProduct } from '@/components/quote-engine/QuoteCatalogSection';
 import QuoteSidebar from '@/components/quote-engine/QuoteSidebar';
@@ -717,13 +717,30 @@ export default function QuoteEnginePage() {
       )}
 
       <Sidebar />
-      {/* Top Navigation */}
-      <QuoteTopNav
+      <TopHeader
+        title="Quote Engine"
         searchQuery={searchQuery}
-        onSearchChange={(q) => setSearchQuery(q)}
-        cartItemCount={cartItemCount}
-        onToggleSidebar={() => setIsQuoteSidebarOpen(!isQuoteSidebarOpen)}
-        isSidebarOpen={isQuoteSidebarOpen}
+        onSearchChange={setSearchQuery}
+        placeholder="Search Global catalog..."
+        extraActions={
+          <button
+            type="button"
+            onClick={() => setIsQuoteSidebarOpen(!isQuoteSidebarOpen)}
+            className={`relative p-2 rounded-md transition-colors ${
+              isQuoteSidebarOpen ? 'bg-black text-white' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+            title="My Quote"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            {cartItemCount > 0 && (
+              <span className={`absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 grid place-items-center rounded-full text-[10px] font-bold ${isQuoteSidebarOpen ? 'bg-white text-black' : 'bg-black text-white'}`}>
+                {cartItemCount}
+              </span>
+            )}
+          </button>
+        }
       />
 
       {/* Main Workspace with Three-Column Layout */}

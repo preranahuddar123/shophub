@@ -23,7 +23,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
-import BrandsHeader from '@/components/brands/BrandsHeader';
+import TopHeader from '@/components/layout/TopHeader';
 import BrandsStats from '@/components/brands/BrandsStats';
 import BrandsFilters from '@/components/brands/BrandsFilters';
 import BrandsTable from '@/components/brands/BrandsTable';
@@ -120,14 +120,14 @@ export default function BrandsMasterPage() {
     <div className="min-h-screen bg-[#F8F9FA] text-gray-900 font-sans antialiased">
       <Sidebar />
 
-      {/* 2. Top Header Navigation with + CREATE OFFERING */}
-      <BrandsHeader
+      <TopHeader
+        title="Brands"
         searchQuery={searchQuery}
         onSearchChange={(q) => {
           setSearchQuery(q);
           setCurrentPage(1);
         }}
-        onCreateOffering={() => setIsCreateOfferingModalOpen(true)}
+        placeholder="Search brands, codes, or manufacturers..."
       />
 
       {/* 3. Main Content Area */}
