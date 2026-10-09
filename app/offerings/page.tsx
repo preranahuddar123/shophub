@@ -6,6 +6,7 @@ import TopHeader from '@/components/layout/TopHeader';
 import CatalogWelcome from '@/components/layout/CatalogWelcome';
 import OfferingFilters from '@/components/offerings/OfferingFilters';
 import OfferingTable from '@/components/offerings/OfferingTable';
+import { OfferingGrid, OfferingMatrix } from '@/components/offerings/OfferingGallery';
 import Pagination from '@/components/offerings/Pagination';
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
 import {
@@ -74,6 +75,7 @@ export default function OfferingsPage() {
               <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
                 {/* List View Icon */}
                 <button
+                  type="button"
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 rounded-md transition-all ${
                     viewMode === 'list'
@@ -88,6 +90,7 @@ export default function OfferingsPage() {
                 </button>
                 {/* Grid View Icon */}
                 <button
+                  type="button"
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded-md transition-all ${
                     viewMode === 'grid'
@@ -102,6 +105,7 @@ export default function OfferingsPage() {
                 </button>
                 {/* Matrix View Icon */}
                 <button
+                  type="button"
                   onClick={() => setViewMode('matrix')}
                   className={`p-1.5 rounded-md transition-all ${
                     viewMode === 'matrix'
@@ -212,16 +216,24 @@ export default function OfferingsPage() {
           {/* TABLE & PAGINATION (Matching UI Reference) */}
           {/* ===================================================================== */}
           {totalItems > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-              <OfferingTable offerings={paginatedOfferings} isLoading={isLoading} />
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={pageSize}
-                onPageChange={(page) => dispatch(setPage(page))}
-                isLoading={isLoading}
-              />
+            <div>
+              {viewMode === 'list' && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+                  <OfferingTable offerings={paginatedOfferings} isLoading={isLoading} />
+                </div>
+              )}
+              {viewMode === 'grid' && <OfferingGrid offerings={paginatedOfferings} />}
+              {viewMode === 'matrix' && <OfferingMatrix offerings={paginatedOfferings} />}
+              <div className="mt-4 bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={pageSize}
+                  onPageChange={(page) => dispatch(setPage(page))}
+                  isLoading={isLoading}
+                />
+              </div>
             </div>
           )}
         </div>
