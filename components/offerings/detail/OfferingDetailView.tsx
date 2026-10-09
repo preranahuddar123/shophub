@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import OfferingDetailHeader from './OfferingDetailHeader';
 import OfferingImageGallery from './OfferingImageGallery';
 import OfferingPricingSummary from './OfferingPricingSummary';
@@ -21,6 +22,7 @@ interface OfferingDetailViewProps {
   isLoading?: boolean;
   error?: string | null;
   onRefresh?: () => void;
+  fallbackProdId?: string | number;
 }
 
 export default function OfferingDetailView({
@@ -32,7 +34,10 @@ export default function OfferingDetailView({
   isLoading = false,
   error,
   onRefresh,
+  fallbackProdId,
 }: OfferingDetailViewProps) {
+  const router = useRouter();
+  const prodId = (product as any)?.prodId || (product as any)?.productId || offering?.id || fallbackProdId;
   // Extract core product info
   const offeringName =
     product?.offering_name ||
@@ -135,6 +140,9 @@ export default function OfferingDetailView({
         offeringName={offeringName}
         categoryName={categoryName}
         status={status}
+        onEdit={() => {
+          if (prodId) router.push(`/offerings/CreateOfferings?id=${prodId}`);
+        }}
       />
 
       {/* Main Two-Column Layout */}

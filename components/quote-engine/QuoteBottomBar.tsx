@@ -30,7 +30,7 @@ export default function QuoteBottomBar({
     : grandTotal * 0.33;
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 h-20 bg-neutral-950 text-white z-30 px-6 border-t border-neutral-800 flex items-center justify-between shadow-2xl">
+    <footer className="fixed bottom-0 left-56 right-0 h-20 bg-neutral-950 text-white z-30 px-6 border-t border-neutral-800 flex items-center justify-between shadow-2xl">
       {/* Financial Metrics */}
       <div className="flex items-center gap-8">
         {/* Grand Total */}

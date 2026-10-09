@@ -168,6 +168,7 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
 
       {/* 10. ACTIONS - Add to Cart */}
       <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
         <button
           onClick={() => {
             // Navigate to quote engine with this item
@@ -192,6 +193,14 @@ export default function OfferingRow({ offering }: OfferingRowProps) {
           </svg>
           Quote
         </button>
+        <button
+          type="button"
+          onClick={() => router.push(`/offerings/CreateOfferings?id=${offering.prodId || ''}`)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+        >
+          Update
+        </button>
+        </div>
       </td>
     </tr>
   );

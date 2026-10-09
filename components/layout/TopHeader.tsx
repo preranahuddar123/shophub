@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import SignOutButton from '@/components/auth/SignOutButton';
+import { firstNameFrom, roleLabel, useCurrentUser } from '@/lib/auth/useCurrentUser';
 
 interface TopHeaderProps {
   title?: string;
@@ -10,6 +12,7 @@ interface TopHeaderProps {
   onSearchChange?: (query: string) => void;
   onSearch?: (query: string) => void;
   placeholder?: string;
+  extraActions?: ReactNode;
 }
 
 export default function TopHeader({
@@ -18,8 +21,10 @@ export default function TopHeader({
   onSearchChange,
   onSearch,
   placeholder = 'Search product SKU...',
+  extraActions,
 }: TopHeaderProps) {
   const router = useRouter();
+  const user = useCurrentUser();
   const [internalQuery, setInternalQuery] = useState('');
   const searchQuery = controlledQuery ?? internalQuery;
 
@@ -68,6 +73,7 @@ export default function TopHeader({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          {extraActions}
           {/* Notifications with red dot */}
           <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
             <svg
@@ -111,16 +117,28 @@ export default function TopHeader({
             <span>Create Offering</span>
           </button>
 
-          {/* User Avatar */}
-          <button className="ml-2 relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 hover:ring-2 hover:ring-gray-300 transition-all">
-            <Image
-              src="/images/avatar.jpg"
-              alt="User avatar"
-              fill
-              className="object-cover"
-              sizes="32px"
-            />
-          </button>
+          <SignOutButton className="ml-1 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-950" />
+
+          <div className="ml-1 flex items-center gap-2">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-gray-900 leading-tight">
+                {user?.name || 'Welcome'}
+              </div>
+              <div className="text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
+                {roleLabel(user) || 'User'}
+              </div>
+            </div>
+            <button
+              className="relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 hover:ring-2 hover:ring-gray-300 transition-all bg-gray-100 text-[10px] font-bold text-gray-700 grid place-items-center"
+              title={user?.email || firstNameFrom(user)}
+            >
+              {user?.name ? (
+                <span>{firstNameFrom(user).slice(0, 1).toUpperCase()}</span>
+              ) : (
+                <Image src="/images/avatar.jpg" alt="User avatar" fill className="object-cover" sizes="32px" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </header>

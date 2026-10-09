@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { useClientDashboard } from '@/lib/client/ClientDashboardContext';
 import { SearchIcon, BellWithBadgeIcon } from '../icons/ClientIcons';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 interface ClientHeaderProps {
   onSearch?: (query: string) => void;
@@ -66,6 +67,8 @@ export default function ClientHeader({
         >
           <BellWithBadgeIcon className="w-5 h-5" />
         </button>
+
+        <SignOutButton className="text-sm font-medium text-gray-700 hover:text-gray-900" />
 
         {/* Divider */}
         <div className="h-7 w-[1px] bg-gray-300/80" />

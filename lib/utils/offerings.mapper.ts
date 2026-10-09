@@ -212,7 +212,6 @@ export function extractAllOfferingsFromDatabase(
 
   // 1. First add direct products from database products table
   for (const product of products) {
-    if (!isLiveCatalogProduct(product)) continue;
     const pId = String(product.prodId || product.productId || product.sku_id || '');
     if (!pId) continue;
 
@@ -226,32 +225,6 @@ export function extractAllOfferingsFromDatabase(
 
     const offering = mapProductToOffering(product, subCatName, subInfo?.id);
     productMap.set(offering.prodId, offering);
-  }
-
-  // 2. Add products found under secondary categories (if not already added)
-  for (const sec of secondaryCategories) {
-    if (sec.products && Array.isArray(sec.products)) {
-      for (const p of sec.products) {
-        const pId = String(p.prodId || p.productId || p.sku_id || '');
-        if (pId && !productMap.has(pId) && isLiveCatalogProduct(p)) {
-          const offering = mapProductToOffering(p, sec.secondaryCategoryName, sec.secondaryCategoryId);
-          productMap.set(offering.prodId, offering);
-        }
-      }
-    }
-  }
-
-  // 3. Add products found under primary categories (if not already added)
-  for (const pri of primaryCategories) {
-    if (pri.products && Array.isArray(pri.products)) {
-      for (const p of pri.products) {
-        const pId = String(p.prodId || p.productId || p.sku_id || '');
-        if (pId && !productMap.has(pId) && isLiveCatalogProduct(p)) {
-          const offering = mapProductToOffering(p, pri.primaryCategoryName, pri.primaryCategoryId);
-          productMap.set(offering.prodId, offering);
-        }
-      }
-    }
   }
 
   return Array.from(productMap.values());

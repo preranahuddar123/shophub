@@ -22,7 +22,7 @@ export default function QuoteTopNav({
   isSidebarOpen = false,
 }: QuoteTopNavProps) {
   return (
-    <header className="bg-white border-b border-gray-200 h-14 fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6">
+    <header className="bg-white border-b border-gray-200 h-16 fixed top-0 left-56 right-0 z-30 flex items-center justify-between px-6">
       {/* Left Navigation Tabs */}
       <div className="flex items-center gap-8 h-full">
         <button

@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 interface EnterpriseTopHeaderProps {
   title?: string;
@@ -97,6 +98,8 @@ export default function EnterpriseTopHeader({
             </svg>
             <span>Create Offering</span>
           </button>
+
+          <SignOutButton className="ml-1 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-950" />
 
           {/* User Avatar */}
           <button className="ml-2 relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 hover:ring-2 hover:ring-gray-300 transition-all">
