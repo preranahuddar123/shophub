@@ -22,7 +22,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import BrandsSidebar from '@/components/brands/BrandsSidebar';
+import Sidebar from '@/components/layout/Sidebar';
 import BrandsHeader from '@/components/brands/BrandsHeader';
 import BrandsStats from '@/components/brands/BrandsStats';
 import BrandsFilters from '@/components/brands/BrandsFilters';
@@ -33,7 +33,6 @@ import CreateOfferingModal from '@/components/brands/CreateOfferingModal';
 import ImportCatalogModal from '@/components/brands/ImportCatalogModal';
 import AdvancedFiltersModal from '@/components/brands/AdvancedFiltersModal';
 import BrandDetailDrawer from '@/components/brands/BrandDetailDrawer';
-import ReportsModal from '@/components/brands/ReportsModal';
 import { BrandEntity, BrandStats } from '@/lib/db/homesmerry';
 
 export default function BrandsMasterPage() {
@@ -57,7 +56,6 @@ export default function BrandsMasterPage() {
   const [isCreateOfferingModalOpen, setIsCreateOfferingModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
-  const [isReportsModalOpen, setIsReportsModalOpen] = useState<boolean>(false);
 
   // Fetch dynamic brands from API
   const fetchBrands = useCallback(async () => {
@@ -120,8 +118,7 @@ export default function BrandsMasterPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-gray-900 font-sans antialiased">
-      {/* 1. Left Sidebar with View Reports */}
-      <BrandsSidebar onOpenReports={() => setIsReportsModalOpen(true)} />
+      <Sidebar />
 
       {/* 2. Top Header Navigation with + CREATE OFFERING */}
       <BrandsHeader
@@ -292,12 +289,6 @@ export default function BrandsMasterPage() {
         }}
       />
 
-      {/* 6. Reports Modal */}
-      <ReportsModal
-        isOpen={isReportsModalOpen}
-        onClose={() => setIsReportsModalOpen(false)}
-        stats={stats}
-      />
     </div>
   );
 }

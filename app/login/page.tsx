@@ -28,7 +28,7 @@ function LoginForm() {
       const next = searchParams.get('next');
       const allowedNext =
         data.user.role === 'client'
-          ? next && (next.startsWith('/client') || next === '/')
+          ? next && next.startsWith('/client')
           : next && !next.startsWith('/client') && next !== '/';
       router.replace(allowedNext && next ? next : data.redirect);
       router.refresh();

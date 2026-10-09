@@ -1,11 +1,5 @@
-import type { Metadata } from 'next';
-import ClientDashboard from '@/components/client/dashboard/ClientDashboard';
-
-export const metadata: Metadata = {
-  title: 'HUB - Client Portal',
-  description: 'Track your interior project journey, quotes, milestones, and payments.',
-};
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <ClientDashboard />;
+  redirect('/login');
 }

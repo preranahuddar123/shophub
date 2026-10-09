@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import Sidebar from '@/components/layout/Sidebar';
 import QuoteTopNav from '@/components/quote-engine/QuoteTopNav';
 import QuoteContextSidebar from '@/components/quote-engine/QuoteContextSidebar';
 import QuoteCatalogSection, { CatalogProduct } from '@/components/quote-engine/QuoteCatalogSection';
@@ -715,6 +716,7 @@ export default function QuoteEnginePage() {
         </div>
       )}
 
+      <Sidebar />
       {/* Top Navigation */}
       <QuoteTopNav
         searchQuery={searchQuery}
@@ -748,7 +750,7 @@ export default function QuoteEnginePage() {
         />
 
         {/* Center Column: Interactive Catalog & Smart Suggestions */}
-        <main className={`ml-64 ${isQuoteSidebarOpen ? 'mr-80' : 'mr-0'} pt-14 pb-24 flex-1 bg-white min-h-[calc(100vh-3.5rem-5rem)] overflow-y-auto transition-all duration-300`}>
+        <main className={`ml-[30rem] ${isQuoteSidebarOpen ? 'mr-80' : 'mr-0'} pt-16 pb-24 flex-1 bg-white min-h-[calc(100vh-4rem-5rem)] overflow-y-auto transition-all duration-300`}>
           <QuoteCatalogSection
             products={searchedProducts}
             selectedCategory={selectedCategory}
