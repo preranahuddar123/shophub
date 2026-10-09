@@ -5,8 +5,6 @@ import {
   ElasticsearchSearchRequest,
   ElasticsearchSearchResponse,
 } from '../types/dto.types';
-import { isLiveCatalogProduct } from '../utils/offerings.mapper';
-
 /**
  * Empty page response fallback if API is unreachable or empty
  */
@@ -46,6 +44,7 @@ async function getProductsFromLocalApi(
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const response = await fetch(`${origin}/api/products?page=${page}&size=${size}`, {
       cache: 'no-store',
+      credentials: 'include',
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -61,31 +60,8 @@ async function getProductsFromLocalApi(
 export const getAllProducts = async (
   page = 0,
   size = 50,
-  sort = 'prodId,asc'
+  _sort = 'prodId,asc'
 ): Promise<PageResponse<ProdDataResDTO>> => {
-  try {
-    const response = await apiClient.get<any>('/products/getAllProducts', {
-      params: {
-        page,
-        size,
-        sort,
-      },
-      validateStatus: () => true,
-    });
-    if (
-      response.status >= 200 &&
-      response.status < 300 &&
-      response.data &&
-      Array.isArray(response.data.content) &&
-      response.data.content.length > 0
-    ) {
-      const content = response.data.content.filter(isLiveCatalogProduct);
-      return { ...response.data, content, numberOfElements: content.length, empty: content.length === 0 };
-    }
-  } catch {
-    // Spring Boot catalog is down — load from the Next.js MySQL fallback.
-  }
-
   const localPage = await getProductsFromLocalApi(page, size);
   if (localPage) {
     return localPage;
@@ -122,6 +98,7 @@ async function getProductFromLocalApi(prodId: number | string): Promise<ProdData
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const byId = await fetch(`${origin}/api/products?id=${encodeURIComponent(String(prodId))}`, {
       cache: 'no-store',
+      credentials: 'include',
     });
     if (byId.ok) {
       const data = await byId.json();
@@ -142,40 +119,6 @@ async function getProductFromLocalApi(prodId: number | string): Promise<ProdData
     return null;
   }
 }
-
-export interface CreateProductPayload {
-  offering_name: string;
-  offering_type: string;
-  sku_id: string;
-  category: string;
-  brand_id?: number;
-  brand?: string;
-  tags?: string[];
-  short_desc?: string;
-  long_desc?: string;
-  featured_offer?: boolean;
-  is_published?: boolean;
-  pricing?: Record<string, unknown>;
-  inventory?: Record<string, unknown>;
-  media?: Record<string, unknown>;
-  specifications?: Record<string, unknown>;
-  seo?: Record<string, unknown>;
-  internal?: Record<string, unknown>;
-}
-
-export const createProduct = async (payload: CreateProductPayload) => {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const response = await fetch(`${origin}/api/offerings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.success === false) {
-    throw new Error(data?.error || data?.message || 'Failed to create offering');
-  }
-  return data;
-};
 
 export const getProductById = async (prodId: number | string): Promise<ProdDataResDTO | null> => {
   try {

@@ -1,0 +1,67 @@
+import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
+import { hashPassword } from './password';
+
+let ensured = false;
+
+const DEMO_USERS = [
+  {
+    uuid: 100,
+    email: 'admin@hubinterior.com',
+    password: 'Admin@123',
+    first_name: 'ShopHub',
+    last_name: 'Admin',
+    role: 'ADMIN',
+    brand_name: 'Hub Interior',
+  },
+  {
+    uuid: 101,
+    email: 'enterprise@hubinterior.com',
+    password: 'Enterprise@123',
+    first_name: 'Aarav',
+    last_name: 'Mehta',
+    role: 'ENTERPRISE',
+    brand_name: 'Hub Homes',
+  },
+  {
+    uuid: 102,
+    email: 'client@hubinterior.com',
+    password: 'Client@123',
+    first_name: 'Varnika',
+    last_name: 'Sharma',
+    role: 'CLIENT',
+    brand_name: '',
+  },
+];
+
+export async function ensureAuthSchema() {
+  if (ensured) return;
+  const pool = getHomesMerryDbPool();
+
+  const [cols]: any = await pool.query(`SHOW COLUMNS FROM product LIKE 'created_by'`);
+  if (!Array.isArray(cols) || cols.length === 0) {
+    await pool.query(`ALTER TABLE product ADD COLUMN created_by BIGINT NULL`);
+  }
+
+  for (const demo of DEMO_USERS) {
+    const hash = await hashPassword(demo.password);
+    await pool.query(
+      `INSERT INTO user (
+        uuid, email, password, first_name, last_name, role, brand_name, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE role = VALUES(role), brand_name = VALUES(brand_name)`,
+      [demo.uuid, demo.email, hash, demo.first_name, demo.last_name, demo.role, demo.brand_name]
+    );
+    await pool.query(
+      `INSERT INTO login (username, password, role, logintime)
+       SELECT ?, ?, ?, NOW() FROM DUAL
+       WHERE NOT EXISTS (SELECT 1 FROM login WHERE username = ?)`,
+      [demo.email, hash, demo.role, demo.email]
+    );
+  }
+
+  await pool.query(
+    `UPDATE product SET created_by = 101 WHERE created_by IS NULL`
+  );
+
+  ensured = true;
+}
