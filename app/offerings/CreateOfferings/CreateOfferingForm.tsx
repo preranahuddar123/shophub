@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createProduct, updateOfferingSection } from '@/lib/api/product.service';
+import { createProduct, updateOfferingSection } from '@/lib/api/offering-save';
 import RichTextEditor from './RichTextEditor';
 
 type TabId = 'GENERAL' | 'PRICING' | 'INVENTORY' | 'MEDIA' | 'SPECIFICATIONS' | 'SEO' | 'INTERNAL';
