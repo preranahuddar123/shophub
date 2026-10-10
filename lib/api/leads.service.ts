@@ -256,3 +256,190 @@ export const getProjectsForQuoteEngine = async () => {
 
   return leads.map(transformLeadToProject);
 };
+
+export interface QuoteCustomer {
+  id: number;
+  name: string;
+  customerId?: string;
+  phone?: string;
+  email?: string;
+  realName?: string;
+}
+
+export interface QuoteProject {
+  id: number;
+  projectName: string;
+  customerId?: number;
+  status?: string;
+  leadId?: string;
+}
+
+/**
+ * Fetch assigned leads for a CRM User (bucket list only)
+ * Uses GET https://hows.hubinterior.com/v1/leads/filter?leadType=glead&page=0&size=50 with user's CRM token
+ */
+export async function getCrmBucketCustomersAndProjects(token?: string): Promise<{
+  customers: QuoteCustomer[];
+  projects: QuoteProject[];
+}> {
+  const crmToken = token || process.env.NEXT_PUBLIC_CRM_BEARER_TOKEN || 'token_1_1787224003564';
+  try {
+    const res = await fetch('https://hows.hubinterior.com/v1/leads/filter?leadType=glead&page=0&size=50', {
+      headers: {
+        'Authorization': `Bearer ${crmToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const rawLeads: Lead[] = extractLeads(data);
+      if (rawLeads.length > 0) {
+        const customers: QuoteCustomer[] = [];
+        const seenCust = new Set<string>();
+
+        rawLeads.forEach((l) => {
+          const custId = l.customerId || l.customer_id || `BLR-A${l.id}`;
+          const trimmed = String(custId).trim();
+          if (!seenCust.has(trimmed)) {
+            seenCust.add(trimmed);
+            const numId = typeof l.id === 'string' ? parseInt(l.id) || 1 : (l.id as number);
+            const resolvedName = (l.name && l.name.trim()) ||
+              DEFAULT_CRM_CUSTOMERS.find((d) => d.id === numId || d.customerId === trimmed)?.name ||
+              `Customer ${trimmed}`;
+
+            customers.push({
+              id: numId,
+              name: `${resolvedName} (${trimmed})`,
+              customerId: trimmed,
+              phone: l.phoneNumber || (l.phone_number as string),
+              email: l.email,
+              realName: resolvedName,
+            });
+          }
+        });
+
+        const projects: QuoteProject[] = rawLeads.map((l) => {
+          const numId = typeof l.id === 'string' ? parseInt(l.id) || 1 : (l.id as number);
+          const identifier = l.leadId || l.lead_id || l.customerId || `Lead-${l.id}`;
+          return {
+            id: numId,
+            projectName: `Project #${l.id} (${identifier})`,
+            customerId: numId,
+            status: l.status || 'Active',
+            leadId: l.leadId || (l.lead_id as string),
+          };
+        });
+
+        return { customers, projects };
+      }
+    }
+  } catch (err) {
+    console.warn('[CRM Bucket] Failed to fetch live CRM leads, falling back to assigned leads:', err);
+  }
+
+  // Fallback for CRM assigned bucket
+  const customers = await getCustomersFromLeads();
+  const projects = await getProjectsForQuoteEngine();
+  return { customers, projects };
+}
+
+/**
+ * Fetch assigned projects for a Design User (their queue bucket only)
+ * Uses GET https://api.hubinterior.com/api/leads/queue with user's Design token
+ */
+export async function getDesignBucketCustomersAndProjects(token?: string): Promise<{
+  customers: QuoteCustomer[];
+  projects: QuoteProject[];
+}> {
+  const designToken = token || process.env.NEXT_PUBLIC_DESIGN_MODULE_TOKEN || 'sess-1724154432000-ab12cd34';
+  try {
+    const res = await fetch('https://api.hubinterior.com/api/leads/queue', {
+      headers: {
+        'Authorization': `Bearer ${designToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (res.ok) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items: any[] = await res.json();
+      if (Array.isArray(items) && items.length > 0) {
+        const customers: QuoteCustomer[] = [];
+        const seenCust = new Set<string>();
+
+        items.forEach((item) => {
+          const custCode = item.pid || `HUB-${item.id}`;
+          if (!seenCust.has(custCode)) {
+            seenCust.add(custCode);
+            const clientName = item.projectName || item.intakeCustomerName || 'Client';
+            customers.push({
+              id: item.id,
+              name: `${clientName} (${custCode})`,
+              customerId: custCode,
+              phone: item.contactNo,
+              email: item.clientEmail,
+              realName: clientName,
+            });
+          }
+        });
+
+        const projects: QuoteProject[] = items.map((item) => {
+          const clientName = item.projectName || item.intakeCustomerName || 'Client';
+          const stage = item.projectStage ? ` - ${item.projectStage}` : '';
+          return {
+            id: item.id,
+            projectName: `Project #${item.pid || item.id} (${clientName}${stage})`,
+            customerId: item.id,
+            status: item.projectStage || 'Active',
+            leadId: item.pid,
+          };
+        });
+
+        return { customers, projects };
+      }
+    }
+  } catch (err) {
+    console.warn('[Design Bucket] Failed to fetch live design queue, falling back:', err);
+  }
+
+  // Fallback for Design queue
+  return {
+    customers: [
+      { id: 2, name: 'Sam (HUB1848)', customerId: 'HUB1848', phone: '9790676265', email: 'sam.p.george1@gmail.com', realName: 'Sam' },
+    ],
+    projects: [
+      { id: 2, projectName: 'Project #HUB1848 (Sam - 20-60%)', customerId: 2, status: '20-60%', leadId: 'HUB1848' },
+    ],
+  };
+}
+
+/**
+ * Fetch full global list for Admin
+ */
+export async function getAdminCustomersAndProjects(): Promise<{
+  customers: QuoteCustomer[];
+  projects: QuoteProject[];
+}> {
+  const [crmData, designData] = await Promise.all([
+    getCrmBucketCustomersAndProjects(),
+    getDesignBucketCustomersAndProjects(),
+  ]);
+
+  const customerMap = new Map<number, QuoteCustomer>();
+  crmData.customers.forEach((c) => customerMap.set(c.id, c));
+  designData.customers.forEach((c) => {
+    if (!customerMap.has(c.id)) customerMap.set(c.id, c);
+  });
+
+  const projectMap = new Map<number, QuoteProject>();
+  crmData.projects.forEach((p) => projectMap.set(p.id, p));
+  designData.projects.forEach((p) => {
+    if (!projectMap.has(p.id)) projectMap.set(p.id, p);
+  });
+
+  return {
+    customers: Array.from(customerMap.values()),
+    projects: Array.from(projectMap.values()),
+  };
+}

@@ -8,7 +8,9 @@ interface QuoteSidebarProps {
   onUpdateQuantity: (itemId: number, newQty: number) => void;
   onRemoveItem: (itemId: number) => void;
   onClearQuote: () => void;
-  onClose: () => void; // Made required since it should always be provided
+  onClose: () => void;
+  isAdmin?: boolean;
+  onUpdateDiscount?: (newPct: number) => void;
 }
 
 export default function QuoteSidebar({
@@ -17,7 +19,11 @@ export default function QuoteSidebar({
   onRemoveItem,
   onClearQuote,
   onClose,
+  isAdmin = false,
+  onUpdateDiscount,
 }: QuoteSidebarProps) {
+  const [isEditingDiscount, setIsEditingDiscount] = React.useState(false);
+  const [customDiscountInput, setCustomDiscountInput] = React.useState('');
   const items = quote?.items || [];
 
   // Group items by room
@@ -202,6 +208,7 @@ export default function QuoteSidebar({
 
       {/* Bottom Summary Section */}
       <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-2 text-xs">
+        {/* Subtotal */}
         <div className="flex items-center justify-between text-gray-600">
           <span>Subtotal</span>
           <span className="font-bold text-gray-900">
@@ -209,11 +216,102 @@ export default function QuoteSidebar({
           </span>
         </div>
 
-        <div className="flex items-center justify-between text-red-500">
-          <span>Total Discount ({discountPct}%)</span>
-          <span className="font-bold">
-            -₹{discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
+        {/* Total Discount Section */}
+        <div className="pt-1 pb-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className={discountPct > 0 ? 'text-red-500 font-medium' : 'text-gray-500'}>
+              Total Discount ({discountPct}%)
+            </span>
+
+            <div className="flex items-center gap-2">
+              <span className={discountPct > 0 ? 'font-bold text-red-500' : 'font-medium text-gray-400'}>
+                {discountPct > 0
+                  ? `-₹${discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : '₹0.00'}
+              </span>
+
+              {isAdmin && onUpdateDiscount && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDiscount(!isEditingDiscount)}
+                  className="text-[10px] font-semibold text-black hover:text-gray-700 underline underline-offset-2 ml-1"
+                >
+                  {isEditingDiscount ? 'Close' : discountPct > 0 ? 'Edit' : '+ Add'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Discount Control Panel (Admin Only) */}
+          {isAdmin && isEditingDiscount && onUpdateDiscount && (
+            <div className="mt-2.5 p-2.5 bg-white border border-gray-200 rounded-lg shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  Select Discount
+                </span>
+                {discountPct > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdateDiscount(0);
+                      setIsEditingDiscount(false);
+                    }}
+                    className="text-[10px] text-red-500 hover:text-red-700 font-medium"
+                  >
+                    Remove Discount
+                  </button>
+                )}
+              </div>
+
+              {/* Preset percentage pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[3, 5, 7, 10, 15].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      onUpdateDiscount(preset);
+                      setIsEditingDiscount(false);
+                    }}
+                    className={`px-2.5 py-1 text-[10px] font-semibold rounded-md border transition-colors ${
+                      discountPct === preset
+                        ? 'bg-black text-white border-black'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    {preset}%
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom percentage input */}
+              <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="Custom %"
+                  value={customDiscountInput}
+                  onChange={(e) => setCustomDiscountInput(e.target.value)}
+                  className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-black"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseFloat(customDiscountInput);
+                    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+                      onUpdateDiscount(parsed);
+                      setCustomDiscountInput('');
+                      setIsEditingDiscount(false);
+                    }
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-bold bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {quote?.estimatedFreight !== undefined && quote.estimatedFreight > 0 && (

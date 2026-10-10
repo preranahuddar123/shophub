@@ -1,6 +1,6 @@
 export const SESSION_COOKIE = 'shophub_session';
 
-export type PortalRole = 'admin' | 'enterprise' | 'client';
+export type PortalRole = 'admin' | 'enterprise' | 'client' | 'crm' | 'designer';
 
 export type SessionUser = {
   id: number;
@@ -8,6 +8,8 @@ export type SessionUser = {
   name: string;
   role: PortalRole;
   brand?: string;
+  crmToken?: string;
+  designToken?: string;
 };
 
 export function encodeSession(user: SessionUser): string {
@@ -28,7 +30,8 @@ export function decodeSession(value?: string | null): SessionUser | null {
   try {
     const json = decodeBase64Url(value);
     const user = JSON.parse(json) as SessionUser;
-    if (!user?.id || (user.role !== 'admin' && user.role !== 'enterprise' && user.role !== 'client')) {
+    const validRoles: PortalRole[] = ['admin', 'enterprise', 'client', 'crm', 'designer'];
+    if (!user?.id || !validRoles.includes(user.role)) {
       return null;
     }
     return user;
@@ -52,7 +55,7 @@ export function redirectForRole(role: PortalRole) {
 }
 
 export function canManageCatalog(role?: PortalRole | null) {
-  return role === 'admin' || role === 'enterprise';
+  return role === 'admin' || role === 'enterprise' || role === 'crm' || role === 'designer';
 }
 
 export function isEnterprisePath(pathname: string) {

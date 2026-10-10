@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { Suspense, useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import QuoteContextSidebar from '@/components/quote-engine/QuoteContextSidebar';
@@ -9,8 +10,15 @@ import QuoteSidebar from '@/components/quote-engine/QuoteSidebar';
 import QuoteBottomBar from '@/components/quote-engine/QuoteBottomBar';
 import { getAllPrimaryCategories, getAllSecondaryCategories } from '@/lib/api/category.service';
 import { getAllProducts } from '@/lib/api/product.service';
-import { getProjectsForQuoteEngine, getCustomersFromLeads } from '@/lib/api/leads.service';
+import {
+  getCrmBucketCustomersAndProjects,
+  getDesignBucketCustomersAndProjects,
+  getAdminCustomersAndProjects,
+  QuoteCustomer,
+  QuoteProject,
+} from '@/lib/api/leads.service';
 import { getRequirementScope, transformScopeToRooms } from '@/lib/api/requirement-scope.service';
+import { useCurrentUser } from '@/lib/auth/useCurrentUser';
 
 // Local UI-only Interfaces
 export interface Customer {
@@ -129,7 +137,29 @@ const computeTotals = (items: QuoteItemModel[], discountPct = 5) => {
   };
 };
 
-export default function QuoteEnginePage() {
+function QuoteEngineContent() {
+  const user = useCurrentUser();
+  const searchParams = useSearchParams();
+
+  // Role detection: URL param takes priority (for testing/portal redirection), then user session role, default admin
+  const effectiveRole = useMemo(() => {
+    const paramRole = searchParams?.get('role')?.toLowerCase();
+    if (paramRole === 'crm' || paramRole === 'designer' || paramRole === 'admin' || paramRole === 'enterprise') {
+      return paramRole;
+    }
+    const source = searchParams?.get('source')?.toLowerCase();
+    if (source === 'crm') return 'crm';
+    if (source === 'design' || source === 'designer') return 'designer';
+    if (user?.role) return user.role;
+    return 'admin';
+  }, [user, searchParams]);
+
+  const isAdmin = effectiveRole === 'admin';
+  const isEnterprise = effectiveRole === 'enterprise';
+  const isCrm = effectiveRole === 'crm';
+  const isDesigner = effectiveRole === 'designer';
+
+
   // Navigation & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -151,8 +181,8 @@ export default function QuoteEnginePage() {
     'Client requested brushed brass finish for all hardware and fittings.'
   );
 
-  // Quote State - starts empty, populated as user adds items
-  const initialTotals = computeTotals([], 5);
+  // Quote State - Admin defaults to 5%, others default to 0% unless authorized
+  const initialTotals = computeTotals([], isAdmin ? 5 : 0);
   const [quote, setQuote] = useState<QuoteModel>({
     id: 1,
     quoteNumber: 'QTE-2026-1001',
@@ -253,44 +283,56 @@ export default function QuoteEnginePage() {
   // Load data from APIs on mount
   // ============================================================================
   
-  // Load customers + projects from leads API in one shot
+  // Load customers + projects from leads API in one shot based on role/bucket
   useEffect(() => {
-    const loadFromLeads = async () => {
-      // Customers
-      try {
-        const customersData = await getCustomersFromLeads();
-        setCustomers(customersData);
-        if (customersData.length > 0) {
-          setSelectedCustomerId(customersData[0].id);
-          setQuote((prev) => ({
-            ...prev,
-            customerId: customersData[0].id,
-            customerName: customersData[0].name,
-          }));
-        }
-      } catch { /* leave empty */ }
+    // Enterprise users must NOT see or load customer context
+    if (isEnterprise) {
+      setIsLoadingProjects(false);
+      return;
+    }
 
-      // Projects
+    const loadFromLeads = async () => {
       try {
         setIsLoadingProjects(true);
-        const projectsData = await getProjectsForQuoteEngine();
-        setProjects(projectsData);
-        if (projectsData.length > 0) {
-          const first = projectsData[0];
-          setSelectedProjectId(first.id);
-          setQuote((prev) => ({
-            ...prev,
-            projectId: first.id,
-            projectName: first.projectName,
-          }));
+        let bucketData: { customers: QuoteCustomer[]; projects: QuoteProject[] };
+
+        if (isCrm) {
+          bucketData = await getCrmBucketCustomersAndProjects(user?.crmToken);
+        } else if (isDesigner) {
+          bucketData = await getDesignBucketCustomersAndProjects(user?.designToken);
+        } else {
+          bucketData = await getAdminCustomersAndProjects();
         }
-      } catch { /* leave empty */ } finally {
+
+        setCustomers(bucketData.customers);
+        setProjects(bucketData.projects);
+
+        if (bucketData.customers.length > 0) {
+          const paramLeadId = searchParams?.get('leadId') ? Number(searchParams.get('leadId')) : null;
+          const targetCustomer = (paramLeadId ? bucketData.customers.find((c) => c.id === paramLeadId) : null) || bucketData.customers[0];
+
+          setSelectedCustomerId(targetCustomer.id);
+          const matchingProj = bucketData.projects.find((p) => p.customerId === targetCustomer.id) || bucketData.projects[0];
+          if (matchingProj) {
+            setSelectedProjectId(matchingProj.id);
+            setQuote((prev) => ({
+              ...prev,
+              customerId: targetCustomer.id,
+              customerName: targetCustomer.name,
+              projectId: matchingProj.id,
+              projectName: matchingProj.projectName,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load bucket leads:', err);
+      } finally {
         setIsLoadingProjects(false);
       }
     };
 
     loadFromLeads();
-  }, []);
+  }, [isEnterprise, isCrm, isDesigner, user, searchParams]);
 
   // ============================================================================
   // Load Requirement Scope & Rooms from CRM API whenever active project changes
@@ -506,7 +548,7 @@ export default function QuoteEnginePage() {
       customerId: id,
       customerName: selected?.name,
     }));
-    const matchingProject = projects.find((p) => p.id === id);
+    const matchingProject = projects.find((p) => p.customerId === id || p.id === id);
     if (matchingProject) {
       setSelectedProjectId(matchingProject.id);
       setSelectedUnit(null);
@@ -527,7 +569,7 @@ export default function QuoteEnginePage() {
       projectId: id,
       projectName: selected?.projectName,
     }));
-    const matchingCustomer = customers.find((c) => c.id === id);
+    const matchingCustomer = customers.find((c) => c.id === id || (selected?.customerId && c.id === selected.customerId));
     if (matchingCustomer) {
       setSelectedCustomerId(matchingCustomer.id);
       setQuote((prev) => ({
@@ -536,6 +578,24 @@ export default function QuoteEnginePage() {
         customerName: matchingCustomer.name,
       }));
     }
+  };
+
+  const handleUpdateDiscount = (newPct: number) => {
+    if (!isAdmin) {
+      setToastMessage('Only administrators are authorized to modify discounts.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    setQuote((prev) => {
+      const totals = computeTotals(prev.items, newPct);
+      return {
+        ...prev,
+        ...totals,
+      };
+    });
+    setToastMessage(`Discount updated to ${newPct}% by Admin.`);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleSelectRoom = (roomName: string) => {
@@ -745,29 +805,31 @@ export default function QuoteEnginePage() {
 
       {/* Main Workspace with Three-Column Layout */}
       <div className="flex-1 flex w-full">
-        {/* Left Column: Customer, Project & Room Context */}
-        <QuoteContextSidebar
-          customers={customers}
-          selectedCustomerId={selectedCustomerId}
-          onSelectCustomer={handleSelectCustomer}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onSelectProject={handleSelectProject}
-          isLoadingProjects={isLoadingProjects}
-          rooms={rooms}
-          selectedRoom={selectedRoom}
-          onSelectRoom={handleSelectRoom}
-          onAddRoom={handleAddRoom}
-          selectedUnit={selectedUnit}
-          onSelectUnit={setSelectedUnit}
-          validityPeriod={validityPeriod}
-          onValidityChange={handleValidityChange}
-          internalNotes={internalNotes}
-          onNotesChange={handleNotesChange}
-        />
+        {/* Left Column: Customer, Project & Room Context (Visible to Admin, CRM, and Design users - Hidden for Enterprise) */}
+        {!isEnterprise && (
+          <QuoteContextSidebar
+            customers={customers}
+            selectedCustomerId={selectedCustomerId}
+            onSelectCustomer={handleSelectCustomer}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={handleSelectProject}
+            isLoadingProjects={isLoadingProjects}
+            rooms={rooms}
+            selectedRoom={selectedRoom}
+            onSelectRoom={handleSelectRoom}
+            onAddRoom={handleAddRoom}
+            selectedUnit={selectedUnit}
+            onSelectUnit={setSelectedUnit}
+            validityPeriod={validityPeriod}
+            onValidityChange={handleValidityChange}
+            internalNotes={internalNotes}
+            onNotesChange={handleNotesChange}
+          />
+        )}
 
         {/* Center Column: Interactive Catalog & Smart Suggestions */}
-        <main className={`ml-[30rem] ${isQuoteSidebarOpen ? 'mr-80' : 'mr-0'} pt-16 pb-24 flex-1 bg-white min-h-[calc(100vh-4rem-5rem)] overflow-y-auto transition-all duration-300`}>
+        <main className={`${isEnterprise ? 'ml-56' : 'ml-[30rem]'} ${isQuoteSidebarOpen ? 'mr-80' : 'mr-0'} pt-16 pb-24 flex-1 bg-white min-h-[calc(100vh-4rem-5rem)] overflow-y-auto transition-all duration-300`}>
           <QuoteCatalogSection
             products={searchedProducts}
             selectedCategory={selectedCategory}
@@ -787,6 +849,8 @@ export default function QuoteEnginePage() {
             onClose={() => {
               setIsQuoteSidebarOpen(false);
             }}
+            isAdmin={isAdmin}
+            onUpdateDiscount={handleUpdateDiscount}
           />
         )}
       </div>
@@ -802,5 +866,13 @@ export default function QuoteEnginePage() {
         isGeneratingPdf={isGeneratingPdf}
       />
     </div>
+  );
+}
+
+export default function QuoteEnginePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs text-gray-400">Loading Quote Engine...</div>}>
+      <QuoteEngineContent />
+    </Suspense>
   );
 }

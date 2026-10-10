@@ -33,5 +33,7 @@ export function roleLabel(user?: SessionUser | null) {
   if (!user?.role) return '';
   if (user.role === 'admin') return 'Admin';
   if (user.role === 'enterprise') return 'Enterprise';
+  if (user.role === 'crm') return 'CRM Specialist';
+  if (user.role === 'designer') return 'Designer';
   return 'Client';
 }
