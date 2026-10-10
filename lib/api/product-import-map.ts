@@ -1,11 +1,29 @@
 import type { CreateProductPayload } from './offering-save';
+import {
+  PRODUCT_IMPORT_FIELDS,
+  normKey,
+  type ColumnMapping,
+  type ImportField,
+} from './product-import-fields';
 
-function normKey(key: string) {
-  return String(key)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
+export type { ColumnMapping, ImportField, ImportFieldGroup } from './product-import-fields';
+export {
+  IMPORT_FIELD_GROUPS,
+  PRODUCT_IMPORT_FIELDS,
+  PRODUCT_IMPORT_TEMPLATE_HEADERS,
+  suggestColumnMapping,
+  normKey,
+} from './product-import-fields';
+
+export function parseColumnMapping(raw: unknown): ColumnMapping | undefined {
+  if (raw == null || raw === '') return undefined;
+  const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const mapping: ColumnMapping = {};
+  for (const [key, header] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof header === 'string' && header.trim()) mapping[key] = header.trim();
+  }
+  return mapping;
 }
 
 function pick(row: Record<string, unknown>, aliases: string[]) {
@@ -18,6 +36,20 @@ function pick(row: Record<string, unknown>, aliases: string[]) {
     if (value != null && String(value).trim() !== '') return value;
   }
   return '';
+}
+
+function valueForField(row: Record<string, unknown>, field: ImportField, mapping?: ColumnMapping) {
+  if (mapping) {
+    const header = mapping[field.key];
+    if (!header) return '';
+    if (Object.prototype.hasOwnProperty.call(row, header)) return row[header];
+    const target = normKey(header);
+    for (const [key, value] of Object.entries(row)) {
+      if (normKey(key) === target) return value;
+    }
+    return '';
+  }
+  return pick(row, [field.key, ...field.aliases]);
 }
 
 function asString(value: unknown) {
@@ -47,27 +79,32 @@ function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-export function excelRowToProduct(row: Record<string, unknown>): CreateProductPayload | null {
-  const offering_name = asString(pick(row, ['offering_name', 'name', 'product_name', 'product', 'title', 'offering']));
-  const sku_id = asString(pick(row, ['sku_id', 'sku', 'sku id', 'skuid']));
+export function excelRowToProduct(row: Record<string, unknown>, mapping?: ColumnMapping): CreateProductPayload | null {
+  const field = (key: string) => {
+    const def = PRODUCT_IMPORT_FIELDS.find((item) => item.key === key);
+    return valueForField(row, def || { key, label: key, group: 'General', aliases: [] }, mapping);
+  };
+
+  const offering_name = asString(field('offering_name'));
+  const sku_id = asString(field('sku_id'));
   if (!offering_name || !sku_id) return null;
 
-  const category = asString(pick(row, ['category', 'primary_category'])).toUpperCase() || 'FURNITURE';
-  const brand = asString(pick(row, ['brand', 'brand_name']));
-  const brandIdRaw = pick(row, ['brand_id']);
-  const tags = asList(pick(row, ['tags', 'tag']));
-  const keywords = asList(pick(row, ['keywords', 'seo_keywords'])) || tags;
-  const short_desc = asString(pick(row, ['short_desc', 'short_description', 'description', 'desc'])) || offering_name;
-  const long_desc = asString(pick(row, ['long_desc', 'long_description'])) || short_desc;
-  const selling_price = asNumber(pick(row, ['selling_price', 'price', 'mrp', 'sale_price']));
-  const cost_price = asNumber(pick(row, ['cost_price', 'cost']));
-  const discount = asNumber(pick(row, ['discount']));
-  const current_stock = asNumber(pick(row, ['current_stock', 'stock', 'qty', 'quantity']));
-  const is_published = asBool(pick(row, ['is_published', 'published', 'status']));
+  const category = asString(field('category')).toUpperCase() || 'FURNITURE';
+  const brand = asString(field('brand'));
+  const brandIdRaw = field('brand_id');
+  const tags = asList(field('tags'));
+  const keywords = asList(field('keywords')).length ? asList(field('keywords')) : tags;
+  const short_desc = asString(field('short_desc')) || offering_name;
+  const long_desc = asString(field('long_desc')) || short_desc;
+  const selling_price = asNumber(field('selling_price'));
+  const cost_price = asNumber(field('cost_price'));
+  const discount = asNumber(field('discount'));
+  const current_stock = asNumber(field('current_stock'));
+  const is_published = asBool(field('is_published'));
 
   return {
     offering_name,
-    offering_type: asString(pick(row, ['offering_type', 'type'])) || 'PRODUCT',
+    offering_type: asString(field('offering_type')) || 'PRODUCT',
     sku_id,
     category,
     brand,
@@ -75,54 +112,54 @@ export function excelRowToProduct(row: Record<string, unknown>): CreateProductPa
     tags,
     short_desc,
     long_desc,
-    featured_offer: asBool(pick(row, ['featured_offer', 'featured'])),
+    featured_offer: asBool(field('featured_offer')),
     is_published,
     pricing: {
       cost_price,
       selling_price,
       discount,
-      gst_rate: asString(pick(row, ['gst_rate', 'gst'])) || 'GST_18',
-      units: asString(pick(row, ['units', 'price_unit', 'uom'])) || 'PER_PIECE',
-      desc: asString(pick(row, ['pricing_desc'])) || undefined,
+      gst_rate: asString(field('gst_rate')) || 'GST_18',
+      units: asString(field('units')) || 'PER_PIECE',
+      desc: asString(field('pricing_desc')) || undefined,
     },
     inventory: {
       sku_Id: sku_id,
-      barcode: asString(pick(row, ['barcode'])),
+      barcode: asString(field('barcode')),
       current_stock,
-      minimum_stock_level: asNumber(pick(row, ['minimum_stock_level', 'min_stock'])),
-      reorder_quantity: asNumber(pick(row, ['reorder_quantity', 'reorder'])),
+      minimum_stock_level: asNumber(field('minimum_stock_level')),
+      reorder_quantity: asNumber(field('reorder_quantity')),
       sourcingLogistics: {
-        preferred_vendor: asString(pick(row, ['preferred_vendor', 'vendor'])) || 'IN_HOUSE',
-        lead_time: asNumber(pick(row, ['lead_time'])),
+        preferred_vendor: asString(field('preferred_vendor')) || 'IN_HOUSE',
+        lead_time: asNumber(field('lead_time')),
       },
     },
     media: {
-      primary_image: asString(pick(row, ['primary_image', 'image', 'image_url', 'imageurl'])),
-      gallery_images: asList(pick(row, ['gallery_images', 'gallery'])),
-      video_link: asString(pick(row, ['video_link', 'video'])),
-      image_360: asString(pick(row, ['image_360'])),
+      primary_image: asString(field('primary_image')),
+      gallery_images: asList(field('gallery_images')),
+      video_link: asString(field('video_link')),
+      image_360: asString(field('image_360')),
     },
     specifications: {
       physical_dimensions: {
-        length: asNumber(pick(row, ['length', 'length_cm'])),
-        width: asNumber(pick(row, ['width', 'width_cm'])),
-        height: asNumber(pick(row, ['height', 'height_cm'])),
-        weight: asNumber(pick(row, ['weight', 'weight_kg'])),
+        length: asNumber(field('length')),
+        width: asNumber(field('width')),
+        height: asNumber(field('height')),
+        weight: asNumber(field('weight')),
       },
       material_finish: {
-        primary_material: asString(pick(row, ['primary_material', 'material'])) || 'SOLID_WOOD',
-        secondary_material: asString(pick(row, ['secondary_material'])),
-        finish_type: asString(pick(row, ['finish_type', 'finish'])) || 'MATTE',
+        primary_material: asString(field('primary_material')) || 'SOLID_WOOD',
+        secondary_material: asString(field('secondary_material')),
+        finish_type: asString(field('finish_type')) || 'MATTE',
       },
       technical_properties: {
-        load_capacity: asString(pick(row, ['load_capacity'])) || 'UP_TO_200_KG',
-        desc: asString(pick(row, ['care_instructions'])),
+        load_capacity: asString(field('load_capacity')) || 'UP_TO_200_KG',
+        desc: asString(field('care_instructions')),
       },
     },
     seo: {
-      page_title: asString(pick(row, ['page_title', 'seo_title'])) || offering_name,
-      meta_desc: asString(pick(row, ['meta_desc', 'seo_description'])) || short_desc,
-      url_slug: asString(pick(row, ['url_slug', 'slug'])) || slugify(offering_name),
+      page_title: asString(field('page_title')) || offering_name,
+      meta_desc: asString(field('meta_desc')) || short_desc,
+      url_slug: asString(field('url_slug')) || slugify(offering_name),
       keywords,
     },
     internal: {
@@ -133,38 +170,3 @@ export function excelRowToProduct(row: Record<string, unknown>): CreateProductPa
     },
   };
 }
-
-export const PRODUCT_IMPORT_TEMPLATE_HEADERS = [
-  'offering_name',
-  'sku_id',
-  'offering_type',
-  'category',
-  'brand',
-  'brand_id',
-  'tags',
-  'short_desc',
-  'long_desc',
-  'selling_price',
-  'cost_price',
-  'discount',
-  'gst_rate',
-  'units',
-  'current_stock',
-  'minimum_stock_level',
-  'reorder_quantity',
-  'preferred_vendor',
-  'lead_time',
-  'primary_image',
-  'length',
-  'width',
-  'height',
-  'weight',
-  'primary_material',
-  'finish_type',
-  'page_title',
-  'meta_desc',
-  'url_slug',
-  'keywords',
-  'is_published',
-  'featured_offer',
-];

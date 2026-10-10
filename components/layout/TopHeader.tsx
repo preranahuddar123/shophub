@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import SignOutButton from '@/components/auth/SignOutButton';
 import { firstNameFrom, roleLabel, useCurrentUser } from '@/lib/auth/useCurrentUser';
+import { readLocalProfile } from '@/lib/profile-local';
 
 interface TopHeaderProps {
   title?: string;
@@ -26,7 +27,19 @@ export default function TopHeader({
   const router = useRouter();
   const user = useCurrentUser();
   const [internalQuery, setInternalQuery] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const searchQuery = controlledQuery ?? internalQuery;
+
+  useEffect(() => {
+    const sync = () => setAvatarUrl(readLocalProfile().avatarUrl);
+    sync();
+    window.addEventListener('shophub-profile-updated', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('shophub-profile-updated', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
   const handleSearch = (query: string) => {
     if (controlledQuery === undefined) {
@@ -131,8 +144,11 @@ export default function TopHeader({
             <button
               className="relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 hover:ring-2 hover:ring-gray-300 transition-all bg-gray-100 text-[10px] font-bold text-gray-700 grid place-items-center"
               title={user?.email || firstNameFrom(user)}
+              onClick={() => router.push('/settings')}
             >
-              {user?.name ? (
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : user?.name ? (
                 <span>{firstNameFrom(user).slice(0, 1).toUpperCase()}</span>
               ) : (
                 <Image src="/images/avatar.jpg" alt="User avatar" fill className="object-cover" sizes="32px" />

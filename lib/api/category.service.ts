@@ -20,6 +20,7 @@ export type CategoryWrite = {
   imageUrl?: string;
   seo?: CategorySeo;
   internalTags?: string[];
+  parentSecondaryId?: number;
 };
 
 function unwrapArray(data: any): any[] {
@@ -89,6 +90,12 @@ function secondaryBody(data: CategoryWrite) {
       keywords: data.seo?.keywords || data.internalTags || [],
     },
     internalTags: data.internalTags || [],
+    ...(data.parentSecondaryId
+      ? {
+          parent_scat_id: data.parentSecondaryId,
+          parent: { secondaryCategoryId: data.parentSecondaryId },
+        }
+      : {}),
   };
 }
 
