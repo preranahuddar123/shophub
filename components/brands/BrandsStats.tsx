@@ -37,7 +37,7 @@ export default function BrandsStats({ stats, isLoading }: BrandsStatsProps) {
   }
 
   const totalBrands = (stats?.totalBrands ?? 0).toLocaleString();
-  const brandsGrowth = stats?.brandsGrowthPercentage || '+12%';
+  const brandsGrowth = stats?.brandsGrowthPercentage || '';
   const activeOfferings = stats?.activeOfferingsFormatted || '0';
   const countries = stats?.countriesCount ?? 0;
   const pendingReview = stats?.pendingReviewCount ?? 0;
@@ -53,9 +53,9 @@ export default function BrandsStats({ stats, isLoading }: BrandsStatsProps) {
           <span className="text-2xl font-black text-gray-900 tracking-tight">
             {totalBrands}
           </span>
-          <span className="text-xs font-bold text-emerald-500">
-            {brandsGrowth}
-          </span>
+          {brandsGrowth ? (
+            <span className="text-xs font-bold text-emerald-500">{brandsGrowth}</span>
+          ) : null}
         </div>
       </div>
 

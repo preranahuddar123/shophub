@@ -1,4 +1,3 @@
-import apiClient from './axios-instance';
 import {
   PrimaryCategory,
   SecondaryCategory,
@@ -7,6 +6,91 @@ import {
 } from '../types/api.types';
 
 export type { PrimaryCategory, SecondaryCategory };
+
+export type CategorySeo = {
+  page_title?: string;
+  meta_desc?: string;
+  url_slug?: string;
+  keywords?: string[];
+};
+
+export type CategoryWrite = {
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  seo?: CategorySeo;
+  internalTags?: string[];
+};
+
+function unwrapArray(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.content)) return data.content;
+  if (Array.isArray(data?.categories)) return data.categories;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.result)) return data.result;
+  if (Array.isArray(data?.payload)) return data.payload;
+  return [];
+}
+
+function unwrapEntity(data: any) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  if (data.primaryCategoryId != null || data.secondaryCategoryId != null || data.id != null) {
+    return data;
+  }
+  return data.data || data.category || data.result || data.payload || data;
+}
+
+async function catalogRequest(
+  path: string,
+  init?: { method?: string; body?: unknown; allowError?: boolean }
+) {
+  const res = await fetch(`/api/catalog${path}`, {
+    method: init?.method || 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+    cache: 'no-store',
+    credentials: 'include',
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok && !init?.allowError) {
+    const message = data?.message || data?.error || `Request failed (${res.status})`;
+    throw Object.assign(new Error(message), {
+      status: res.status,
+      code: data?.errorCode || data?.code,
+    });
+  }
+  return { status: res.status, data };
+}
+
+function primaryBody(data: CategoryWrite) {
+  return {
+    primaryCategoryName: data.name,
+    primaryCategoryDescription: data.description || '',
+    imageUrl: data.imageUrl || '',
+    seo: {
+      page_title: data.seo?.page_title || data.name,
+      meta_desc: data.seo?.meta_desc || data.description || '',
+      url_slug: data.seo?.url_slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      keywords: data.seo?.keywords || data.internalTags || [],
+    },
+    internalTags: data.internalTags || [],
+  };
+}
+
+function secondaryBody(data: CategoryWrite) {
+  return {
+    secondaryCategoryName: data.name,
+    secondaryCategoryDescription: data.description || '',
+    imageUrl: data.imageUrl || '',
+    seo: {
+      page_title: data.seo?.page_title || data.name,
+      meta_desc: data.seo?.meta_desc || data.description || '',
+      url_slug: data.seo?.url_slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      keywords: data.seo?.keywords || data.internalTags || [],
+    },
+    internalTags: data.internalTags || [],
+  };
+}
 
 async function getLocalProducts(): Promise<Product[]> {
   try {
@@ -57,11 +141,9 @@ async function getCategoriesFromLocalProducts(kind: 'primary' | 'secondary') {
  */
 export const getAllPrimaryCategories = async (): Promise<PrimaryCategory[]> => {
   try {
-    const response = await apiClient.get<PrimaryCategory[]>('/categories/getAllCategories', {
-      validateStatus: () => true,
-    });
-    if (response.status >= 200 && response.status < 300 && Array.isArray(response.data) && response.data.length > 0) {
-      return response.data;
+    const response = await catalogRequest('/categories/getAllCategories', { allowError: true });
+    if (response.status >= 200 && response.status < 300) {
+      return unwrapArray(response.data);
     }
   } catch {
     // Remote category API is down — use local catalog.
@@ -77,9 +159,11 @@ export const getPrimaryCategoryById = async (
   primaryCategoryId: string | number
 ): Promise<PrimaryCategory | null> => {
   try {
-    const response = await apiClient.get<PrimaryCategory>(`/categories/getCategory/${primaryCategoryId}`);
-    if (response.data) {
-      return response.data;
+    const response = await catalogRequest(`/categories/getCategory/${primaryCategoryId}`, {
+      allowError: true,
+    });
+    if (response.status >= 200 && response.status < 300 && response.data) {
+      return unwrapEntity(response.data);
     }
   } catch (error: any) {
     console.error(`[category.service] getPrimaryCategoryById(${primaryCategoryId}) database query failed:`, error.message);
@@ -93,11 +177,9 @@ export const getPrimaryCategoryById = async (
  */
 export const getAllSecondaryCategories = async (): Promise<SecondaryCategory[]> => {
   try {
-    const response = await apiClient.get<SecondaryCategory[]>('/secondary-categories/getAllCategories', {
-      validateStatus: () => true,
-    });
-    if (response.status >= 200 && response.status < 300 && Array.isArray(response.data) && response.data.length > 0) {
-      return response.data;
+    const response = await catalogRequest('/secondary-categories/getAllCategories', { allowError: true });
+    if (response.status >= 200 && response.status < 300) {
+      return unwrapArray(response.data);
     }
   } catch {
     // Remote category API is down — use local catalog.
@@ -113,11 +195,12 @@ export const getCategoriesByPrimary = async (
   primaryCategoryId: string | number
 ): Promise<SecondaryCategory[]> => {
   try {
-    const response = await apiClient.get<SecondaryCategory[]>(
-      `/secondary-categories/getCategoriesByPrimary/${primaryCategoryId}`
+    const response = await catalogRequest(
+      `/secondary-categories/getCategoriesByPrimary/${primaryCategoryId}`,
+      { allowError: true }
     );
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
+    if (response.status >= 200 && response.status < 300) {
+      return unwrapArray(response.data);
     }
   } catch (error: any) {
     console.error(
@@ -136,11 +219,11 @@ export const getSecondaryCategoryById = async (
   secondaryCategoryId: string | number
 ): Promise<SecondaryCategory | null> => {
   try {
-    const response = await apiClient.get<SecondaryCategory>(
-      `/secondary-categories/getCategory/${secondaryCategoryId}`
-    );
-    if (response.data) {
-      return response.data;
+    const response = await catalogRequest(`/secondary-categories/getCategory/${secondaryCategoryId}`, {
+      allowError: true,
+    });
+    if (response.status >= 200 && response.status < 300 && response.data) {
+      return unwrapEntity(response.data);
     }
   } catch (error: any) {
     console.error(
@@ -153,46 +236,39 @@ export const getSecondaryCategoryById = async (
 
 export const deletePrimaryCategory = async (id: string | number): Promise<void> => {
   try {
-    await apiClient.delete(`/categories/deleteCategory/${id}`);
+    await catalogRequest(`/categories/deleteCategory/${id}`, { method: 'DELETE' });
   } catch (error: any) {
-    console.error(`[category.service] deletePrimaryCategory(${id}) failed:`, error.message);
+    throw toApiError(error, `Failed to delete category ${id}`);
   }
 };
 
 export const deleteSecondaryCategory = async (id: string | number): Promise<void> => {
   try {
-    await apiClient.delete(`/secondary-categories/deleteCategory/${id}`);
+    await catalogRequest(`/secondary-categories/deleteCategory/${id}`, { method: 'DELETE' });
   } catch (error: any) {
-    console.error(`[category.service] deleteSecondaryCategory(${id}) failed:`, error.message);
+    throw toApiError(error, `Failed to delete secondary category ${id}`);
   }
 };
 
-function toApiError(error: any, fallback: string): ApiError {
-  return {
-    message: error.response?.data?.message || error.message || fallback,
-    status: error.response?.status,
-    code: error.response?.data?.code,
-  };
+function toApiError(error: any, fallback: string): Error & ApiError {
+  const err = Object.assign(new Error(error.response?.data?.message || error.message || fallback), {
+    status: error.response?.status || error.status,
+    code: error.response?.data?.code || error.code,
+  });
+  return err;
 }
 
 /**
  * Create a new primary category
  * POST /categories/createCategory
  */
-export const createPrimaryCategory = async (data: {
-  primaryCategoryName: string;
-  primaryCategoryDescription?: string;
-  subCategory?: any[];
-  products?: any[];
-}): Promise<PrimaryCategory> => {
+export const createPrimaryCategory = async (data: CategoryWrite): Promise<PrimaryCategory> => {
   try {
-    const response = await apiClient.post('/categories/createCategory', {
-      primaryCategoryName: data.primaryCategoryName,
-      primaryCategoryDescription: data.primaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
+    const response = await catalogRequest('/categories/createCategory', {
+      method: 'POST',
+      body: primaryBody(data),
     });
-    return response.data;
+    return unwrapEntity(response.data);
   } catch (error: any) {
     throw toApiError(error, 'Failed to create primary category');
   }
@@ -204,21 +280,14 @@ export const createPrimaryCategory = async (data: {
  */
 export const updatePrimaryCategory = async (
   primaryCategoryId: number | string,
-  data: {
-    primaryCategoryName: string;
-    primaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
+  data: CategoryWrite
 ): Promise<PrimaryCategory> => {
   try {
-    const response = await apiClient.put(`/categories/updateCategory/${primaryCategoryId}`, {
-      primaryCategoryName: data.primaryCategoryName,
-      primaryCategoryDescription: data.primaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
+    const response = await catalogRequest(`/categories/updateCategory/${primaryCategoryId}`, {
+      method: 'PUT',
+      body: primaryBody(data),
     });
-    return response.data;
+    return unwrapEntity(response.data);
   } catch (error: any) {
     throw toApiError(error, 'Failed to update primary category');
   }
@@ -230,21 +299,14 @@ export const updatePrimaryCategory = async (
  */
 export const createSecondaryCategory = async (
   primaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
+  data: CategoryWrite
 ): Promise<SecondaryCategory> => {
   try {
-    const response = await apiClient.post(`/secondary-categories/createCategory/${primaryCategoryId}`, {
-      secondaryCategoryName: data.secondaryCategoryName,
-      secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-      subCategory: data.subCategory || [],
-      products: data.products || [],
+    const response = await catalogRequest(`/secondary-categories/createCategory/${primaryCategoryId}`, {
+      method: 'POST',
+      body: secondaryBody(data),
     });
-    return response.data;
+    return unwrapEntity(response.data);
   } catch (error: any) {
     throw toApiError(error, 'Failed to create secondary category');
   }
@@ -256,24 +318,14 @@ export const createSecondaryCategory = async (
  */
 export const createSubCategory = async (
   parentSecondaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
+  data: CategoryWrite
 ): Promise<SecondaryCategory> => {
   try {
-    const response = await apiClient.post(
+    const response = await catalogRequest(
       `/secondary-categories/createSubCategory/${parentSecondaryCategoryId}`,
-      {
-        secondaryCategoryName: data.secondaryCategoryName,
-        secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-        subCategory: data.subCategory || [],
-        products: data.products || [],
-      }
+      { method: 'POST', body: secondaryBody(data) }
     );
-    return response.data;
+    return unwrapEntity(response.data);
   } catch (error: any) {
     throw toApiError(error, 'Failed to create sub-category');
   }
@@ -285,24 +337,14 @@ export const createSubCategory = async (
  */
 export const updateSecondaryCategory = async (
   secondaryCategoryId: number | string,
-  data: {
-    secondaryCategoryName: string;
-    secondaryCategoryDescription?: string;
-    subCategory?: any[];
-    products?: any[];
-  }
+  data: CategoryWrite
 ): Promise<SecondaryCategory> => {
   try {
-    const response = await apiClient.put(
-      `/secondary-categories/updateCategory/${secondaryCategoryId}`,
-      {
-        secondaryCategoryName: data.secondaryCategoryName,
-        secondaryCategoryDescription: data.secondaryCategoryDescription || '',
-        subCategory: data.subCategory || [],
-        products: data.products || [],
-      }
-    );
-    return response.data;
+    const response = await catalogRequest(`/secondary-categories/updateCategory/${secondaryCategoryId}`, {
+      method: 'PUT',
+      body: secondaryBody(data),
+    });
+    return unwrapEntity(response.data);
   } catch (error: any) {
     throw toApiError(error, 'Failed to update secondary category');
   }
