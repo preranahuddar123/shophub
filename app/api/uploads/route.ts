@@ -9,6 +9,9 @@ const ALLOWED: Record<string, string> = {
   'image/jpg': '.jpg',
   'image/webp': '.webp',
   'image/gif': '.gif',
+  'image/x-icon': '.ico',
+  'image/vnd.microsoft.icon': '.ico',
+  'image/svg+xml': '.svg',
 };
 
 export async function POST(request: NextRequest) {
@@ -20,9 +23,12 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'Image must be 10MB or smaller.' }, { status: 400 });
   }
-  const ext = ALLOWED[file.type];
+  const name = file.name.toLowerCase();
+  let ext = ALLOWED[file.type];
+  if (!ext && name.endsWith('.ico')) ext = '.ico';
+  if (!ext && name.endsWith('.svg')) ext = '.svg';
   if (!ext) {
-    return NextResponse.json({ error: 'Use PNG or JPG up to 10MB.' }, { status: 400 });
+    return NextResponse.json({ error: 'Use PNG, JPG, SVG, or ICO.' }, { status: 400 });
   }
 
   const folderRaw = String(form.get('folder') || 'categories').toLowerCase();

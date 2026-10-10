@@ -36,10 +36,50 @@ interface TreeNode {
   pathNames?: string[];
   icon?: string;
   imageUrl?: string;
+  iconUrl?: string;
 }
 
 function toBreadcrumb(names: string[]) {
   return names.map((name) => name.trim().toUpperCase()).filter(Boolean).join(' > ');
+}
+
+function levelLabel(type: TreeNode['type']) {
+  return type === 'primary' ? 'Primary' : 'Secondary';
+}
+
+function trailTo(nodes: TreeNode[], id: string): TreeNode[] {
+  for (const node of nodes) {
+    if (node.id === id) return [node];
+    const nested = trailTo(node.children || [], id);
+    if (nested.length) return [node, ...nested];
+  }
+  return [];
+}
+
+const CATEGORY_ICON_KEY = 'shophub_category_icons';
+
+function readCategoryIcons(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(CATEGORY_ICON_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeCategoryIcon(id: string, url: string) {
+  const next = readCategoryIcons();
+  if (url) next[id] = url;
+  else delete next[id];
+  localStorage.setItem(CATEGORY_ICON_KEY, JSON.stringify(next));
+}
+
+function applyIcons(nodes: TreeNode[], icons: Record<string, string>): TreeNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    iconUrl: icons[node.id] || node.iconUrl || node.imageUrl || '',
+    children: applyIcons(node.children || [], icons),
+  }));
 }
 
 function slugify(value: string) {
@@ -99,13 +139,55 @@ function mapSecondary(
   };
 }
 
+function parentSecondaryId(cat: any) {
+  return Number(
+    cat.parent_scat_id ??
+      cat.parentScatId ??
+      cat.parentSecondaryCategoryId ??
+      cat.parentId ??
+      cat.parent_secondary_category_id ??
+      cat.parent?.secondaryCategoryId ??
+      cat.parent?.scatId ??
+      0
+  );
+}
+
+function nestSecondaries(list: any[], ancestors: string[], primaryId: number): TreeNode[] {
+  const byParent = new Map<number, any[]>();
+  const roots: any[] = [];
+  for (const item of list) {
+    const parentId = parentSecondaryId(item);
+    if (parentId) {
+      const kids = byParent.get(parentId) || [];
+      kids.push(item);
+      byParent.set(parentId, kids);
+    } else {
+      roots.push(item);
+    }
+  }
+
+  const mapNode = (cat: any, path: string[], type: TreeNode['type']): TreeNode => {
+    const node = mapSecondary(cat, path, type, primaryId);
+    const extra = byParent.get(node.numericId) || [];
+    const nested = [...(node.children || []), ...extra.map((child) => mapNode(child, node.pathNames || path, 'sub'))];
+    const seen = new Set<number>();
+    node.children = nested.filter((child) => {
+      if (!child.numericId || seen.has(child.numericId)) return false;
+      seen.add(child.numericId);
+      return true;
+    });
+    return node;
+  };
+
+  return roots.map((item) => mapNode(item, ancestors, 'secondary'));
+}
+
 function mapPrimary(cat: any, secondaries: any[] = []): TreeNode {
   const id = Number(cat.primaryCategoryId ?? cat.id ?? 0);
   const name = cat.primaryCategoryName || cat.name || 'Category';
   const pathNames = [name];
-  const kids = (secondaries.length ? secondaries : cat.subCategory || []).map((s: any) =>
-    mapSecondary(s, pathNames, 'secondary', id)
-  );
+  const source = secondaries.length ? secondaries : cat.subCategory || [];
+  const kids = nestSecondaries(source, pathNames, id);
   return {
     id: `p-${id}`,
     numericId: id,
@@ -146,10 +228,14 @@ export default function CategoriesPage() {
   const [metaDescription, setMetaDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState('');
+  const [iconUrl, setIconUrl] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+  const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const assetInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Category Asset
   const [assetFile, setAssetFile] = useState<{
@@ -165,12 +251,19 @@ export default function CategoriesPage() {
   // Modal State for adding new category
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalTargetParent, setModalTargetParent] = useState<{
-    type: 'primary' | 'secondary';
+    type: TreeNode['type'];
     id: number;
     name: string;
   } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDesc, setNewCategoryDesc] = useState('');
+  const [newCategorySlug, setNewCategorySlug] = useState('');
+  const [newMetaTitle, setNewMetaTitle] = useState('');
+  const [newMetaDesc, setNewMetaDesc] = useState('');
+  const [newTags, setNewTags] = useState<string[]>([]);
+  const [newTagDraft, setNewTagDraft] = useState('');
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -185,13 +278,24 @@ export default function CategoriesPage() {
         getAllSecondaryCategories(),
       ]);
       const grouped = new Map<number, any[]>();
-      for (const s of allSecondaries as any[]) {
-        const pid = Number(s.primaryCategoryId ?? s.primary_category_id ?? s.primaryCategory?.primaryCategoryId ?? 0);
-        if (!pid) continue;
-        const list = grouped.get(pid) || [];
-        list.push(s);
-        grouped.set(pid, list);
-      }
+      const collect = (items: any[], primaryHint?: number) => {
+        for (const s of items || []) {
+          const pid = Number(
+            s.primaryCategoryId ??
+              s.primary_category_id ??
+              s.primaryCategory?.primaryCategoryId ??
+              primaryHint ??
+              0
+          );
+          if (pid) {
+            const list = grouped.get(pid) || [];
+            list.push({ ...s, primaryCategoryId: pid, subCategory: undefined });
+            grouped.set(pid, list);
+          }
+          if (Array.isArray(s.subCategory)) collect(s.subCategory, pid || primaryHint);
+        }
+      };
+      collect(allSecondaries as any[]);
       const tree = await Promise.all(
         primaries.map(async (primary) => {
           const id = primary.primaryCategoryId;
@@ -201,7 +305,8 @@ export default function CategoriesPage() {
           return mapPrimary(primary, secondaries);
         })
       );
-      setTreeData(tree);
+      const withIcons = applyIcons(tree, readCategoryIcons());
+      setTreeData(withIcons);
       setExpandedNodes((prev) => {
         const next = { ...prev };
         tree.forEach((node) => {
@@ -209,7 +314,9 @@ export default function CategoriesPage() {
         });
         return next;
       });
-      const flat = tree.flatMap((p) => [p, ...(p.children || []).flatMap((s) => [s, ...(s.children || [])])]);
+      const flatten = (nodes: TreeNode[]): TreeNode[] =>
+        nodes.flatMap((node) => [node, ...flatten(node.children || [])]);
+      const flat = flatten(withIcons);
       const chosen = (selectId && flat.find((n) => n.id === selectId)) || flat[0] || null;
       if (chosen) {
         setSelectedNode(chosen);
@@ -220,6 +327,7 @@ export default function CategoriesPage() {
         setMetaDescription(chosen.metaDescription || '');
         setTags(chosen.tags || []);
         setImageUrl(chosen.imageUrl || '');
+        setIconUrl(chosen.iconUrl || '');
         setAssetFile(chosen.imageUrl ? { name: chosen.imageUrl.split('/').pop() || 'image', size: '', dimensions: '' } : null);
       }
     } catch (err: any) {
@@ -255,6 +363,7 @@ export default function CategoriesPage() {
     setMetaDescription(node.metaDescription || '');
     setTags(node.tags || []);
     setImageUrl(node.imageUrl || '');
+    setIconUrl(readCategoryIcons()[node.id] || node.iconUrl || '');
     setAssetFile(node.imageUrl ? { name: node.imageUrl.split('/').pop() || 'image', size: '', dimensions: '' } : null);
   };
 
@@ -265,7 +374,7 @@ export default function CategoriesPage() {
         const detail = await getPrimaryCategoryById(node.numericId);
         if (detail) {
           const mapped = mapPrimary(detail, []);
-          applyNodeToForm({ ...mapped, children: node.children, id: node.id });
+          applyNodeToForm({ ...mapped, children: node.children, id: node.id, iconUrl: node.iconUrl });
         }
       } else {
         const detail = await getSecondaryCategoryById(node.numericId);
@@ -276,6 +385,7 @@ export default function CategoriesPage() {
             id: node.id,
             children: node.children,
             primaryId: node.primaryId,
+            iconUrl: node.iconUrl,
           });
         }
       }
@@ -296,35 +406,20 @@ export default function CategoriesPage() {
     if (!searchQuery.trim()) return treeData;
     const q = searchQuery.toLowerCase();
 
-    return treeData
-      .map((p) => {
-        const matchesPrimary = p.name.toLowerCase().includes(q);
-        const matchingChildren = (p.children || [])
-          .map((sec) => {
-            const matchesSec = sec.name.toLowerCase().includes(q);
-            const matchingSubs = (sec.children || []).filter((sub) =>
-              sub.name.toLowerCase().includes(q)
-            );
-            if (matchesSec || matchingSubs.length > 0) {
-              return { ...sec, children: matchingSubs };
-            }
-            return null;
-          })
-          .filter(Boolean) as TreeNode[];
-
-        if (matchesPrimary || matchingChildren.length > 0) {
-          return { ...p, children: matchingChildren };
-        }
-        return null;
-      })
-      .filter(Boolean) as TreeNode[];
+    const filterNode = (node: TreeNode): TreeNode | null => {
+      const kids = (node.children || []).map(filterNode).filter(Boolean) as TreeNode[];
+      if (node.name.toLowerCase().includes(q)) return { ...node };
+      if (kids.length) return { ...node, children: kids };
+      return null;
+    };
+    return treeData.map(filterNode).filter(Boolean) as TreeNode[];
   }, [treeData, searchQuery]);
 
-  const liveBreadcrumb = useMemo(() => {
-    const current = categoryName.trim() || selectedNode?.name || '';
-    const ancestors = (selectedNode?.pathNames || []).slice(0, -1);
-    return toBreadcrumb(current ? [...ancestors, current] : ancestors);
-  }, [selectedNode, categoryName]);
+  const breadcrumbTrail = useMemo(() => {
+    if (!selectedNode) return [];
+    const trail = trailTo(treeData, selectedNode.id);
+    return trail.length ? trail : [selectedNode];
+  }, [treeData, selectedNode]);
 
   // ============================================================================
   // UI-ONLY ACTIONS: SAVE, DISCARD, ADD TAG, REMOVE TAG, ADD CATEGORY
@@ -341,6 +436,7 @@ export default function CategoriesPage() {
       if (!selectedNode) {
         const created = await createPrimaryCategory(payload);
         const node = mapPrimary(created);
+        if (iconUrl) writeCategoryIcon(node.id, iconUrl);
         showToast(`Category "${payload.name}" created.`);
         await loadCategories(node.numericId ? node.id : undefined);
         setTreeData((prev) => {
@@ -365,11 +461,31 @@ export default function CategoriesPage() {
     }
   };
 
+  const startNewPrimary = () => {
+    setShowAddModal(false);
+    setModalTargetParent(null);
+    setSelectedNode(null);
+    setCategoryName('');
+    setUrlSlug('');
+    setDescription('');
+    setMetaTitle('');
+    setMetaDescription('');
+    setTags([]);
+    setImageUrl('');
+    setIconUrl('');
+    setAssetFile(null);
+    setNewTagInput('');
+    setIsAddingTag(false);
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+  };
+
   const handleDiscard = () => {
     if (selectedNode) {
       selectNode(selectedNode);
       showToast('Changes discarded.');
+      return;
     }
+    startNewPrimary();
   };
 
   const handleDeleteCategory = async () => {
@@ -485,37 +601,193 @@ export default function CategoriesPage() {
     }
   };
 
+  const patchTreeIcon = (id: string, url: string) => {
+    const walk = (nodes: TreeNode[]): TreeNode[] =>
+      nodes.map((node) => ({
+        ...node,
+        iconUrl: node.id === id ? url : node.iconUrl,
+        children: walk(node.children || []),
+      }));
+    setTreeData((prev) => walk(prev));
+    setSelectedNode((prev) => (prev && prev.id === id ? { ...prev, iconUrl: url } : prev));
+  };
+
+  const handleIconFile = async (file: File | undefined) => {
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'];
+    if (!allowed.includes(file.type) && !/\.(png|jpe?g|webp|gif|ico|svg)$/i.test(file.name)) {
+      showToast('Use PNG, JPG, SVG, or ICO for the favicon.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Favicon must be 2MB or smaller.');
+      return;
+    }
+    setIsUploadingIcon(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('folder', 'categories');
+      const res = await fetch('/api/uploads', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      setIconUrl(data.url);
+      if (selectedNode) {
+        writeCategoryIcon(selectedNode.id, data.url);
+        patchTreeIcon(selectedNode.id, data.url);
+      }
+      showToast('Folder favicon updated.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to upload favicon');
+    } finally {
+      setIsUploadingIcon(false);
+      if (iconInputRef.current) iconInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveIcon = () => {
+    setIconUrl('');
+    if (selectedNode) {
+      writeCategoryIcon(selectedNode.id, '');
+      patchTreeIcon(selectedNode.id, '');
+    }
+    showToast('Folder favicon removed.');
+  };
+
+  const resetCreateForm = () => {
+    setNewCategoryName('');
+    setNewCategoryDesc('');
+    setNewCategorySlug('');
+    setNewMetaTitle('');
+    setNewMetaDesc('');
+    setNewTags([]);
+    setNewTagDraft('');
+    setNewImageUrl('');
+  };
+
+  const openAddChild = (node: TreeNode) => {
+    setModalTargetParent({ type: node.type, id: node.numericId, name: node.name });
+    setExpandedNodes((prev) => ({ ...prev, [node.id]: true }));
+    resetCreateForm();
+    setShowAddModal(true);
+  };
+
   const handleCreateNewCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) return;
+    if (!newCategoryName.trim()) {
+      showToast('Enter a category name.');
+      return;
+    }
     const payload = {
       name: newCategoryName.trim(),
       description: newCategoryDesc.trim(),
+      imageUrl: newImageUrl,
       seo: {
-        page_title: newCategoryName.trim(),
-        meta_desc: newCategoryDesc.trim(),
-        url_slug: slugify(newCategoryName),
-        keywords: [],
+        page_title: newMetaTitle.trim() || newCategoryName.trim(),
+        meta_desc: newMetaDesc.trim() || newCategoryDesc.trim(),
+        url_slug: newCategorySlug.trim() || slugify(newCategoryName),
+        keywords: newTags,
       },
-      internalTags: [],
+      internalTags: newTags,
+      parentSecondaryId: modalTargetParent && modalTargetParent.type !== 'primary' ? modalTargetParent.id : undefined,
     };
+    setIsCreating(true);
     try {
       if (!modalTargetParent) {
         await createPrimaryCategory(payload);
+        showToast(`Primary category "${payload.name}" created.`);
       } else if (modalTargetParent.type === 'primary') {
         await createSecondaryCategory(modalTargetParent.id, payload);
+        showToast(`Secondary category "${payload.name}" created.`);
       } else {
         await createSubCategory(modalTargetParent.id, payload);
+        showToast(`Secondary category "${payload.name}" created under ${modalTargetParent.name}.`);
       }
-      showToast(`Category "${payload.name}" created.`);
-      setNewCategoryName('');
-      setNewCategoryDesc('');
+      resetCreateForm();
       setShowAddModal(false);
+      const parentKey = modalTargetParent
+        ? `${modalTargetParent.type === 'primary' ? 'p' : modalTargetParent.type === 'sub' ? 'sub' : 's'}-${modalTargetParent.id}`
+        : null;
       setModalTargetParent(null);
+      if (parentKey) {
+        setExpandedNodes((prev) => ({ ...prev, [parentKey]: true }));
+      }
       await loadCategories();
     } catch (err: any) {
       showToast(err.message || 'Failed to create category');
+    } finally {
+      setIsCreating(false);
     }
+  };
+
+  const renderFolder = (node: TreeNode, depth: number) => {
+    const isExpanded = !!expandedNodes[node.id];
+    const isSelected = selectedNode?.id === node.id;
+    const children = node.children || [];
+
+    return (
+      <div key={node.id}>
+        <div
+          style={{ paddingLeft: 6 + depth * 14 }}
+          className={`group flex items-center gap-1 rounded-md py-1 pr-1 text-xs ${
+            isSelected ? 'bg-gray-100 font-bold text-black' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => toggleExpand(node.id)}
+            className="grid h-5 w-5 place-items-center text-gray-400"
+            aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+          >
+            <svg
+              className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!isExpanded) toggleExpand(node.id);
+              selectNode(node);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          >
+            {node.iconUrl ? (
+              <img src={node.iconUrl} alt="" className="h-5 w-5 shrink-0 rounded-sm object-cover" />
+            ) : (
+              <span className="shrink-0">{isExpanded ? '📂' : '📁'}</span>
+            )}
+            <span className="truncate">{node.name}</span>
+          </button>
+          <button
+            type="button"
+            title="Add secondary category"
+            onClick={() => openAddChild(node)}
+            className="grid h-5 w-5 shrink-0 place-items-center rounded border border-gray-200 text-gray-500 hover:border-black hover:text-black"
+          >
+            +
+          </button>
+        </div>
+        {isExpanded && (
+          <div className="ml-3 border-l border-gray-200">
+            {children.map((child) => renderFolder(child, depth + 1))}
+            <button
+              type="button"
+              onClick={() => openAddChild(node)}
+              style={{ paddingLeft: 8 + (depth + 1) * 14 }}
+              className="flex w-full items-center gap-1.5 py-1 pr-2 text-left text-[11px] font-semibold text-gray-400 hover:text-black"
+            >
+              <span>+</span>
+              <span>Add secondary category</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -546,157 +818,21 @@ export default function CategoriesPage() {
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 tracking-tight">Catalog Structure</h2>
             <button
-              onClick={() => {
-                setModalTargetParent(null);
-                setShowAddModal(true);
-              }}
+              onClick={startNewPrimary}
               className="w-7 h-7 rounded-full border border-gray-300 hover:border-black text-gray-600 hover:text-black flex items-center justify-center text-sm font-semibold transition-colors"
-              title="Add Root Category"
+              title="New primary category"
             >
               +
             </button>
           </div>
 
           {/* Tree Navigation */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-1">
-            {isLoadingTree && <p className="px-2 py-6 text-xs text-gray-400">Loading categories…</p>}
+          <div className="flex-1 overflow-y-auto p-2">
+            {isLoadingTree && <p className="px-2 py-6 text-xs text-gray-400">Loading folders…</p>}
             {!isLoadingTree && filteredTreeData.length === 0 && (
-              <p className="px-2 py-6 text-xs text-gray-400">No categories yet. Use + to create a root category.</p>
+              <p className="px-2 py-6 text-xs text-gray-400">No folders yet. Use + to create a primary category.</p>
             )}
-            {filteredTreeData.map((primary) => {
-              const isExpanded = !!expandedNodes[primary.id];
-              return (
-                <div key={primary.id} className="space-y-0.5">
-                  {/* Primary Category Row */}
-                  <div
-                    onClick={() => {
-                      toggleExpand(primary.id);
-                      selectNode(primary);
-                    }}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-100 text-xs font-bold text-gray-800 cursor-pointer transition-colors ${
-                      selectedNode?.id === primary.id ? 'bg-gray-100' : ''
-                    }`}
-                  >
-                    <svg
-                      className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                        isExpanded ? 'rotate-90' : ''
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-
-                    {/* Icon */}
-                    {primary.icon === 'folder' && <span className="text-sm">📁</span>}
-                    {primary.icon === 'bulb' && <span className="text-sm">💡</span>}
-                    {primary.icon === 'palette' && <span className="text-sm">🎨</span>}
-                    {primary.icon === 'wrench' && <span className="text-sm">🔧</span>}
-
-                    <span className="truncate">{primary.name}</span>
-                  </div>
-
-                  {/* Secondary Categories Container */}
-                  {isExpanded && primary.children && (
-                    <div className="ml-5 pl-2 border-l border-gray-200 space-y-0.5">
-                      {primary.children.map((sec) => {
-                        const isSecExpanded = !!expandedNodes[sec.id];
-                        const isSelected = selectedNode?.id === sec.id;
-
-                        return (
-                          <div key={sec.id} className="space-y-0.5">
-                            {/* Secondary Category Row */}
-                            <div
-                              onClick={() => {
-                                toggleExpand(sec.id);
-                                selectNode(sec);
-                              }}
-                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${
-                                isSelected
-                                  ? 'bg-gray-100 font-bold text-black border border-gray-200'
-                                  : 'hover:bg-gray-50 text-gray-700 font-semibold'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                {sec.children && sec.children.length > 0 && (
-                                  <svg
-                                    className={`w-3 h-3 text-gray-400 transition-transform ${
-                                      isSecExpanded ? 'rotate-90' : ''
-                                    }`}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                )}
-                                <span className="text-gray-400 text-xs">▦</span>
-                                <span className="truncate">{sec.name}</span>
-                              </div>
-
-                              {sec.productCount !== undefined && (
-                                <span className="text-[10px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.2 rounded-full">
-                                  {sec.productCount}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Sub-Categories Container */}
-                            {isSecExpanded && sec.children && (
-                              <div className="ml-4 pl-2 border-l border-gray-200 space-y-0.5">
-                                {sec.children.map((sub) => {
-                                  const isSubSelected = selectedNode?.id === sub.id;
-                                  const isPremium = sub.name.toLowerCase().includes('premium');
-
-                                  return (
-                                    <div
-                                      key={sub.id}
-                                      onClick={() => selectNode(sub)}
-                                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${
-                                        isSubSelected
-                                          ? 'bg-gray-100 font-bold text-black border border-gray-200 shadow-2xs'
-                                          : 'hover:bg-gray-50 text-gray-600'
-                                      }`}
-                                    >
-                                      {isPremium ? (
-                                        <span className="text-amber-500 text-xs">★</span>
-                                      ) : sub.name.toLowerCase().includes('sliding') ? (
-                                        <span className="text-gray-400 text-xs">＝</span>
-                                      ) : (
-                                        <span className="text-gray-400 text-xs">▢</span>
-                                      )}
-                                      <span className="truncate">{sub.name}</span>
-                                    </div>
-                                  );
-                                })}
-
-                                {/* Add Sub-Category Button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setModalTargetParent({
-                                      type: 'secondary',
-                                      id: sec.numericId,
-                                      name: sec.name,
-                                    });
-                                    setShowAddModal(true);
-                                  }}
-                                  className="w-full text-left flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-gray-400 hover:text-black uppercase tracking-wider transition-colors"
-                                >
-                                  <span>+</span>
-                                  <span>ADD SUB-CATEGORY</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filteredTreeData.map((node) => renderFolder(node, 0))}
           </div>
         </section>
 
@@ -706,11 +842,43 @@ export default function CategoriesPage() {
         <main className="flex-1 bg-white p-8 overflow-y-auto">
           {/* Top Breadcrumb & Actions */}
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-              {liveBreadcrumb || 'CATEGORY'}
-            </div>
+            <nav className="flex min-w-0 flex-1 flex-wrap items-end gap-x-1.5 gap-y-1 pr-4">
+              {selectedNode ? (
+                breadcrumbTrail.map((crumb, index) => (
+                  <span key={crumb.id} className="flex items-end gap-1.5">
+                    {index > 0 && <span className="mb-0.5 text-gray-300">›</span>}
+                    <button
+                      type="button"
+                      onClick={() => selectNode(crumb)}
+                      className={`text-left ${crumb.id === selectedNode.id ? '' : 'opacity-70 hover:opacity-100'}`}
+                    >
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                        {levelLabel(crumb.type)}
+                      </span>
+                      <span className="block text-xs font-bold text-gray-800">
+                        {index === breadcrumbTrail.length - 1 ? categoryName || crumb.name : crumb.name}
+                      </span>
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span className="text-left">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-400">Primary</span>
+                  <span className="block text-xs font-bold text-gray-800">
+                    {categoryName.trim() || 'New primary category'}
+                  </span>
+                </span>
+              )}
+            </nav>
 
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={startNewPrimary}
+                className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-xs transition-colors"
+              >
+                New primary category
+              </button>
               <button
                 type="button"
                 onClick={handleDiscard}
@@ -718,6 +886,15 @@ export default function CategoriesPage() {
               >
                 Discard
               </button>
+              {selectedNode && (
+                <button
+                  type="button"
+                  onClick={() => openAddChild(selectedNode)}
+                  className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                >
+                  Add secondary category
+                </button>
+              )}
               {selectedNode && (
                 <button
                   type="button"
@@ -733,15 +910,20 @@ export default function CategoriesPage() {
                 disabled={isSaving}
                 className="px-4 py-2 bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
               >
-                {isSaving ? 'Saving…' : selectedNode ? 'Save Category' : 'Create Category'}
+                {isSaving ? 'Saving…' : selectedNode ? 'Save Category' : 'Create primary category'}
               </button>
             </div>
           </div>
 
           {/* Heading */}
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-8">
-            {categoryName || 'Category Details'}
+          <h1 className={`text-3xl font-extrabold text-gray-900 tracking-tight ${selectedNode ? 'mb-8' : 'mb-2'}`}>
+            {selectedNode ? categoryName || 'Category Details' : categoryName || 'New primary category'}
           </h1>
+          {!selectedNode && (
+            <p className="mb-8 text-sm text-gray-500">
+              Fill in the primary category details here, then click Create primary category. Use the + on a folder to add a secondary category in the popup.
+            </p>
+          )}
 
           {/* Grid Layout for Settings Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -760,11 +942,15 @@ export default function CategoriesPage() {
                   {/* Category Name */}
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                      CATEGORY NAME
+                      {selectedNode?.type === 'secondary' || selectedNode?.type === 'sub'
+                        ? 'SECONDARY CATEGORY NAME'
+                        : 'PRIMARY CATEGORY NAME'}
                     </label>
                     <input
+                      ref={nameInputRef}
                       type="text"
                       value={categoryName}
+                      placeholder={selectedNode ? '' : 'Enter primary category name'}
                       onChange={(e) => {
                         setCategoryName(e.target.value);
                         setUrlSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
@@ -847,6 +1033,48 @@ export default function CategoriesPage() {
 
             {/* Right Column: Category Asset & Internal Tags */}
             <div className="space-y-6">
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-2xs">
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Folder favicon</h3>
+                <p className="mb-4 text-[11px] text-gray-500">Shown next to this category in Catalog Structure.</p>
+                <input
+                  ref={iconInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,.ico,.svg"
+                  className="hidden"
+                  onChange={(e) => handleIconFile(e.target.files?.[0])}
+                />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={isUploadingIcon}
+                    onClick={() => iconInputRef.current?.click()}
+                    className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-dashed border-gray-300 bg-gray-50 hover:border-gray-400"
+                  >
+                    {iconUrl ? (
+                      <img src={iconUrl} alt="Folder favicon" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-lg">📁</span>
+                    )}
+                  </button>
+                  <div className="min-w-0">
+                    <button
+                      type="button"
+                      disabled={isUploadingIcon}
+                      onClick={() => iconInputRef.current?.click()}
+                      className="text-xs font-semibold text-gray-800 hover:underline"
+                    >
+                      {isUploadingIcon ? 'Uploading…' : iconUrl ? 'Change favicon' : 'Upload favicon'}
+                    </button>
+                    <p className="mt-0.5 text-[10px] text-gray-400">PNG, JPG, SVG, or ICO · up to 2MB</p>
+                    {iconUrl && (
+                      <button type="button" onClick={handleRemoveIcon} className="mt-1 text-[11px] font-semibold text-red-600">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Card 3: Category Asset */}
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-2xs">
                 <h3 className="text-sm font-bold text-gray-900 mb-4">Category Asset</h3>
@@ -986,32 +1214,50 @@ export default function CategoriesPage() {
       {/* ========================================================================= */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
-            <h3 className="text-base font-bold text-gray-900 mb-2">
-              {modalTargetParent ? `Add to "${modalTargetParent.name}"` : 'Create Root Category'}
-            </h3>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base font-bold text-gray-900 mb-1">Secondary category details</h3>
             <p className="text-xs text-gray-500 mb-4">
-              Enter details for the new category to add to the catalog structure.
+              {modalTargetParent?.type === 'primary'
+                ? `Creates a secondary category under “${modalTargetParent.name}”.`
+                : `Creates a nested secondary category under “${modalTargetParent?.name || 'the selected folder'}”.`}
             </p>
 
             <form onSubmit={handleCreateNewCategory} className="space-y-4" autoComplete="off">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  CATEGORY NAME
-                </label>
-                <input
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="e.g. Walk-in Closets"
-                  className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
-                  autoFocus
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                    Secondary category name
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => {
+                      setNewCategoryName(e.target.value);
+                      setNewCategorySlug(slugify(e.target.value));
+                      if (!newMetaTitle) setNewMetaTitle(e.target.value);
+                    }}
+                    placeholder="e.g. Walk-in Closets"
+                    className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                    URL slug
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategorySlug}
+                    onChange={(e) => setNewCategorySlug(e.target.value)}
+                    placeholder="walk-in-closets"
+                    className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  DESCRIPTION (OPTIONAL)
+                  Description
                 </label>
                 <textarea
                   rows={2}
@@ -1020,6 +1266,64 @@ export default function CategoriesPage() {
                   placeholder="Brief description..."
                   className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Meta title
+                </label>
+                <input
+                  type="text"
+                  value={newMetaTitle}
+                  onChange={(e) => setNewMetaTitle(e.target.value)}
+                  className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Meta description
+                </label>
+                <textarea
+                  rows={2}
+                  value={newMetaDesc}
+                  onChange={(e) => setNewMetaDesc(e.target.value)}
+                  placeholder="SEO description..."
+                  className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Internal tags
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {newTags.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-700">
+                      {tag}
+                      <button type="button" onClick={() => setNewTags((prev) => prev.filter((item) => item !== tag))}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newTagDraft}
+                    onChange={(e) => setNewTagDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const next = newTagDraft.trim().toUpperCase();
+                        if (next && !newTags.includes(next)) setNewTags((prev) => [...prev, next]);
+                        setNewTagDraft('');
+                      }
+                    }}
+                    placeholder="Add tag and press Enter"
+                    className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1032,9 +1336,10 @@ export default function CategoriesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-gray-800 rounded-lg shadow-xs transition-colors"
+                  disabled={isCreating}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-gray-800 rounded-lg shadow-xs transition-colors disabled:opacity-50"
                 >
-                  Create
+                  {isCreating ? 'Creating…' : 'Create secondary category'}
                 </button>
               </div>
             </form>
