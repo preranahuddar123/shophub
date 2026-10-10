@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   SPRING_TOKEN_COOKIE,
   getServiceSpringToken,
-  jwtUnexpired,
+  loginSpring,
   trySpring,
   trySpringGet,
 } from '@/lib/api/spring';
@@ -17,13 +17,13 @@ function isAllowed(path: string) {
 
 async function springTokenFrom(request: NextRequest) {
   const fromCookie = request.cookies.get(SPRING_TOKEN_COOKIE)?.value;
-  if (jwtUnexpired(fromCookie)) return fromCookie;
+  if (fromCookie) return fromCookie;
   return getServiceSpringToken();
 }
 
 function deniedMessage(method: string) {
   if (method === 'GET') return 'Unable to load catalog data.';
-  return 'The catalog API denied this write. Sign out and sign in again so a fresh backend token can be issued.';
+  return 'Catalog create was denied (403). The backend Bearer token is expired. Sign out and sign in with the same email/password the catalog API uses, or set SPRING_AUTH_USERNAME and SPRING_AUTH_PASSWORD in .env.local.';
 }
 
 async function forward(request: NextRequest, path: string[], method: string) {
@@ -32,7 +32,7 @@ async function forward(request: NextRequest, path: string[], method: string) {
     return NextResponse.json({ message: 'Not found' }, { status: 404 });
   }
 
-  const token = await springTokenFrom(request);
+  let token = await springTokenFrom(request);
 
   if (method === 'GET') {
     const result = await trySpringGet(joined, token);
@@ -40,7 +40,18 @@ async function forward(request: NextRequest, path: string[], method: string) {
   }
 
   const payload = method === 'DELETE' ? undefined : await request.json().catch(() => ({}));
-  const result = await trySpring(joined, payload, method, token);
+  let result = await trySpring(joined, payload, method, token);
+  if (result.status === 403) {
+    const user = process.env.SPRING_AUTH_USERNAME || process.env.SPRING_AUTH_EMAIL;
+    const pass = process.env.SPRING_AUTH_PASSWORD;
+    if (user && pass) {
+      const refreshed = await loginSpring(user, pass);
+      if (refreshed) {
+        token = refreshed;
+        result = await trySpring(joined, payload, method, token);
+      }
+    }
+  }
   if (result.status === 403) {
     return NextResponse.json(
       { message: deniedMessage(method), status: 403 },
