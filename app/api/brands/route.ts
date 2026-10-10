@@ -62,17 +62,28 @@ export async function GET(request: NextRequest) {
       availableCountries = (countryRows || []).map((r: any) => r.country).filter(Boolean);
     } catch (dbErr: any) {
       console.warn('[Brands API] Failed to fetch countries from DB:', dbErr.message);
-      availableCountries = ['Denmark', 'France', 'Germany', 'India', 'Italy', 'Japan', 'Spain', 'Sweden', 'Switzerland', 'UK', 'USA'];
+      availableCountries = [];
     }
 
-    if (backendBrands && backendBrands.brands.length > 0) {
-      const stats: BrandStats = backendStats || {
-        totalBrands: backendBrands.totalFiltered,
-        brandsGrowthPercentage: '+12%',
-        activeOfferings: 34869,
-        activeOfferingsFormatted: '34.9k',
-        countriesCount: availableCountries.length,
-        pendingReviewCount: 14,
+    if (backendBrands) {
+      const countriesFromBrands = [
+        ...new Set(backendBrands.brands.map((b) => b.country).filter(Boolean)),
+      ].sort();
+      const pendingFromBrands = backendBrands.brands.filter(
+        (b) => b.status === 'PENDING' || b.status === 'DRAFT'
+      ).length;
+      const offeringsFromBrands = backendBrands.brands.reduce(
+        (sum, b) => sum + (Number(b.offerings_count) || 0),
+        0
+      );
+      const stats: BrandStats = {
+        totalBrands: backendStats?.totalBrands ?? backendBrands.totalFiltered,
+        brandsGrowthPercentage: backendStats?.brandsGrowthPercentage || '',
+        activeOfferings: backendStats?.activeOfferings ?? offeringsFromBrands,
+        activeOfferingsFormatted:
+          backendStats?.activeOfferingsFormatted || formatOfferingsCount(offeringsFromBrands),
+        countriesCount: backendStats?.countriesCount ?? countriesFromBrands.length,
+        pendingReviewCount: backendStats?.pendingReviewCount ?? pendingFromBrands,
       };
 
       return NextResponse.json({
@@ -83,9 +94,9 @@ export async function GET(request: NextRequest) {
         totalCatalogBrands: stats.totalBrands,
         page: backendBrands.page,
         pageSize: backendBrands.pageSize,
-        totalPages: backendBrands.totalPages,
+        totalPages: Math.max(1, backendBrands.totalPages),
         stats,
-        availableCountries,
+        availableCountries: countriesFromBrands.length ? countriesFromBrands : availableCountries,
         filters: {
           search,
           status: statusParam,
@@ -169,7 +180,7 @@ export async function GET(request: NextRequest) {
 
     const stats: BrandStats = backendStats || {
       totalBrands,
-      brandsGrowthPercentage: '+12%',
+      brandsGrowthPercentage: '',
       activeOfferings: rawOfferings,
       activeOfferingsFormatted: formatOfferingsCount(rawOfferings),
       countriesCount,

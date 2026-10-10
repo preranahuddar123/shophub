@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser } from '@/lib/auth/account';
+import { loginSpring, SPRING_TOKEN_COOKIE } from '@/lib/api/spring';
 import { redirectForRole, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest) {
       redirect: redirectForRole(session.role),
     });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+    const springToken = await loginSpring(email, password);
+    if (springToken) {
+      response.cookies.set(SPRING_TOKEN_COOKIE, springToken, sessionCookieOptions());
+    }
     return response;
   } catch (error: any) {
     return NextResponse.json(

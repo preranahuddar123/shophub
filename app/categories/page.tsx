@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
 import {
@@ -44,6 +44,29 @@ function toBreadcrumb(names: string[]) {
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readImageSize(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve(`${img.naturalWidth}×${img.naturalHeight}`);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve('');
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
 }
 
 function mapSecondary(
@@ -125,6 +148,8 @@ export default function CategoriesPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
+  const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+  const assetInputRef = useRef<HTMLInputElement>(null);
 
   // Category Asset
   const [assetFile, setAssetFile] = useState<{
@@ -364,19 +389,100 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleAddTag = () => {
-    if (newTagInput.trim()) {
-      const formatted = newTagInput.trim().toUpperCase();
-      if (!tags.includes(formatted)) {
-        setTags([...tags, formatted]);
-      }
-      setNewTagInput('');
-      setIsAddingTag(false);
+  const persistCategoryFields = async (nextTags: string[], nextImageUrl: string) => {
+    if (!selectedNode || !categoryName.trim()) return;
+    const payload = {
+      name: categoryName.trim(),
+      description: description.trim(),
+      imageUrl: nextImageUrl,
+      seo: {
+        page_title: metaTitle.trim() || categoryName.trim(),
+        meta_desc: metaDescription.trim() || description.trim(),
+        url_slug: urlSlug.trim() || slugify(categoryName),
+        keywords: nextTags,
+      },
+      internalTags: nextTags,
+    };
+    if (selectedNode.type === 'primary') {
+      await updatePrimaryCategory(selectedNode.numericId, payload);
+    } else {
+      await updateSecondaryCategory(selectedNode.numericId, payload);
     }
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
+  const handleAddTag = async () => {
+    const formatted = newTagInput.trim().toUpperCase();
+    if (!formatted) {
+      showToast('Type a tag name first.');
+      return;
+    }
+    if (tags.includes(formatted)) {
+      setNewTagInput('');
+      setIsAddingTag(false);
+      return;
+    }
+    const nextTags = [...tags, formatted];
+    setTags(nextTags);
+    setNewTagInput('');
+    setIsAddingTag(false);
+    try {
+      await persistCategoryFields(nextTags, imageUrl);
+      showToast(`Tag "${formatted}" added.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save tag');
+    }
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const nextTags = tags.filter((t) => t !== tagToRemove);
+    setTags(nextTags);
+    try {
+      await persistCategoryFields(nextTags, imageUrl);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove tag');
+    }
+  };
+
+  const handleAssetFile = async (file: File | undefined) => {
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      showToast('Use PNG or JPG up to 10MB.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image must be 10MB or smaller.');
+      return;
+    }
+    setIsUploadingAsset(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/uploads', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      const dimensions = await readImageSize(file);
+      setImageUrl(data.url);
+      setAssetFile({ name: file.name, size: formatBytes(file.size), dimensions });
+      await persistCategoryFields(tags, data.url);
+      showToast('Category image updated.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to upload image');
+    } finally {
+      setIsUploadingAsset(false);
+      if (assetInputRef.current) assetInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAsset = async () => {
+    setAssetFile(null);
+    setImageUrl('');
+    try {
+      await persistCategoryFields(tags, '');
+      showToast('Category image removed.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove image');
+    }
   };
 
   const handleCreateNewCategory = async (e: React.FormEvent) => {
@@ -745,38 +851,67 @@ export default function CategoriesPage() {
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-2xs">
                 <h3 className="text-sm font-bold text-gray-900 mb-4">Category Asset</h3>
 
-                {/* Upload Box */}
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50/50">
-                  <div className="w-10 h-10 mx-auto mb-2 text-gray-400 flex items-center justify-center">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
+                <input
+                  ref={assetInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => handleAssetFile(e.target.files?.[0])}
+                />
+
+                <button
+                  type="button"
+                  disabled={isUploadingAsset}
+                  onClick={() => assetInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAssetFile(e.dataTransfer.files?.[0]);
+                  }}
+                  className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50/50 disabled:opacity-60"
+                >
+                  {imageUrl ? (
+                    <img src={imageUrl} alt="Category asset" className="mx-auto mb-3 h-24 w-full max-w-[220px] rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 mx-auto mb-2 text-gray-400 flex items-center justify-center">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                  )}
                   <div className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-1">
-                    DRAG & DROP TO UPDATE
+                    {isUploadingAsset ? 'Uploading…' : 'Drag & drop to update'}
                   </div>
                   <div className="text-[10px] text-gray-400">PNG, JPG up to 10MB</div>
-                </div>
+                </button>
 
-                {/* Current Asset Info */}
                 {assetFile && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded bg-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                      <div className="w-7 h-7 rounded bg-gray-200 overflow-hidden flex items-center justify-center text-gray-500 flex-shrink-0">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-gray-900 truncate">{assetFile.name}</div>
                         <div className="text-[10px] text-gray-400">
-                          {assetFile.size} • {assetFile.dimensions}
+                          {[assetFile.size, assetFile.dimensions].filter(Boolean).join(' • ')}
                         </div>
                       </div>
                     </div>
 
                     <button
-                      onClick={() => setAssetFile(null)}
+                      type="button"
+                      onClick={handleRemoveAsset}
                       className="p-1 text-red-500 hover:text-red-700 transition-colors"
                       title="Delete asset"
                     >
@@ -800,6 +935,7 @@ export default function CategoriesPage() {
                     >
                       <span>{tag}</span>
                       <button
+                        type="button"
                         onClick={() => handleRemoveTag(tag)}
                         className="text-gray-400 hover:text-red-500 font-normal transition-colors"
                       >
@@ -808,27 +944,30 @@ export default function CategoriesPage() {
                     </span>
                   ))}
 
-                  {/* Add Tag Button / Input */}
                   {isAddingTag ? (
-                    <div className="inline-flex items-center gap-1 border border-gray-300 rounded-md px-2 py-0.5">
+                    <div className="inline-flex items-center gap-1 border border-gray-300 rounded-md px-2 py-0.5 bg-white">
                       <input
                         type="text"
                         value={newTagInput}
                         onChange={(e) => setNewTagInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleAddTag();
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddTag();
+                          }
                           if (e.key === 'Escape') setIsAddingTag(false);
                         }}
                         placeholder="Tag name..."
-                        className="text-xs focus:outline-none w-20 uppercase"
+                        className="text-xs font-medium text-gray-900 bg-white focus:outline-none w-28 uppercase select-text"
                         autoFocus
                       />
-                      <button onClick={handleAddTag} className="text-xs font-bold text-black">
+                      <button type="button" onClick={handleAddTag} className="text-xs font-bold text-black">
                         ✓
                       </button>
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => setIsAddingTag(true)}
                       className="inline-flex items-center gap-1 px-3 py-1 border border-dashed border-gray-300 hover:border-black text-gray-500 hover:text-black text-xs font-bold rounded-md transition-colors"
                     >
