@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { getSessionFromRequest } from '@/lib/auth/account';
-import { excelRowToProduct } from '@/lib/api/product-import-map';
+import { excelRowToProduct, parseColumnMapping } from '@/lib/api/product-import-map';
+import { fetchGoogleSheetTable, parseSpreadsheetBuffer } from '@/lib/api/spreadsheet-source';
 
 export const runtime = 'nodejs';
 
@@ -12,19 +12,39 @@ export async function POST(request: NextRequest) {
   }
 
   const form = await request.formData();
+  const sheetUrl = String(form.get('sheetUrl') || '').trim();
   const file = form.get('file');
-  if (!(file instanceof File)) {
-    return NextResponse.json({ success: false, error: 'Upload an Excel or CSV file.' }, { status: 400 });
+
+  let mapping;
+  try {
+    mapping = parseColumnMapping(form.get('mapping'));
+  } catch {
+    return NextResponse.json({ success: false, error: 'Column mapping is invalid.' }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) {
-    return NextResponse.json({ success: false, error: 'The spreadsheet has no sheets.' }, { status: 400 });
+  if (mapping && (!mapping.offering_name || !mapping.sku_id)) {
+    return NextResponse.json(
+      { success: false, error: 'Map sheet columns to Offering name and SKU ID before importing.' },
+      { status: 400 }
+    );
   }
 
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+  let rows: Record<string, unknown>[] = [];
+  try {
+    if (sheetUrl) {
+      rows = (await fetchGoogleSheetTable(sheetUrl)).rows;
+    } else if (file instanceof File) {
+      rows = parseSpreadsheetBuffer(Buffer.from(await file.arrayBuffer())).rows;
+    } else {
+      return NextResponse.json(
+        { success: false, error: 'Upload an Excel/CSV file or paste a Google Sheets link.' },
+        { status: 400 }
+      );
+    }
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message || 'Could not read the spreadsheet.' }, { status: 400 });
+  }
+
   if (!rows.length) {
     return NextResponse.json({ success: false, error: 'No rows found in the file.' }, { status: 400 });
   }
@@ -35,7 +55,7 @@ export async function POST(request: NextRequest) {
   const failed: { row: number; sku_id?: string; error: string }[] = [];
 
   for (let i = 0; i < rows.length && i < 250; i++) {
-    const payload = excelRowToProduct(rows[i]);
+    const payload = excelRowToProduct(rows[i], mapping);
     if (!payload) {
       failed.push({ row: i + 2, error: 'offering_name and sku_id are required.' });
       continue;
