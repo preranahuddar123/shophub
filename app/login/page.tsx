@@ -73,17 +73,20 @@ function LoginForm() {
         <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-3xl border border-black/5 shadow-sm p-8">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Sign in</p>
           <h2 className="mt-2 text-2xl font-extrabold text-gray-950">Welcome back</h2>
-          <p className="mt-1 text-sm text-gray-500">Enter your email and password to continue.</p>
+          <p className="mt-1 text-sm text-gray-500">Enter your username or email and password to continue.</p>
 
           <label className="block mt-6 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-            Email
+            Username
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
+              placeholder="Username or email"
               className="mt-1.5 w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
             />
           </label>

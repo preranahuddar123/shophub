@@ -6,12 +6,12 @@ import { redirectForRole, SESSION_COOKIE, sessionCookieOptions } from '@/lib/aut
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const email = String(body.email || '').trim();
+    const email = String(body.email || body.username || '').trim();
     const password = String(body.password || '');
 
     if (!email || !password) {
       return NextResponse.json(
-        { success: false, error: 'Email and password are required.' },
+        { success: false, error: 'Username and password are required.' },
         { status: 400 }
       );
     }
