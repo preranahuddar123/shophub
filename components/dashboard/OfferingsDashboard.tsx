@@ -88,12 +88,6 @@ export default function OfferingsDashboard() {
             >
               Add Brand
             </Link>
-            <Link
-              href="/offerings/CreateOfferings"
-              className="flex items-center gap-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold"
-            >
-              Create Price List
-            </Link>
           </div>
         </div>
 

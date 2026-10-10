@@ -25,10 +25,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Use PNG or JPG up to 10MB.' }, { status: 400 });
   }
 
+  const folderRaw = String(form.get('folder') || 'categories').toLowerCase();
+  const folder = folderRaw === 'profile' ? 'profile' : 'categories';
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-  const dir = path.join(process.cwd(), 'public', 'uploads', 'categories');
+  const dir = path.join(process.cwd(), 'public', 'uploads', folder);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
 
-  return NextResponse.json({ url: `/uploads/categories/${filename}`, name: file.name, size: file.size });
+  return NextResponse.json({ url: `/uploads/${folder}/${filename}`, name: file.name, size: file.size });
 }

@@ -27,33 +27,47 @@ function tokenFromLoginBody(data: any): string | null {
 }
 
 export async function loginSpring(username: string, password: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${springOrigin()}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email: username, password }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => null);
-    const token = tokenFromLoginBody(data);
-    return jwtUnexpired(token) || token ? token : null;
-  } catch {
-    return null;
+  const bodies = [
+    { username, password },
+    { email: username, password },
+    { username, email: username, password },
+  ];
+  for (const body of bodies) {
+    try {
+      const res = await fetch(`${springOrigin()}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      const header = res.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || null;
+      const token = tokenFromLoginBody(data) || header;
+      if (token) {
+        cachedServiceToken = token;
+        return token;
+      }
+    } catch {
+      /* try next login body */
+    }
   }
+  return null;
 }
 
 let cachedServiceToken: string | null = null;
 
 export async function getServiceSpringToken(): Promise<string | null> {
-  const envToken = process.env.NEXT_PUBLIC_API_BEARER_TOKEN;
-  if (jwtUnexpired(envToken)) return envToken;
   if (jwtUnexpired(cachedServiceToken)) return cachedServiceToken;
+  const envToken = process.env.NEXT_PUBLIC_API_BEARER_TOKEN || process.env.API_BEARER_TOKEN;
+  if (jwtUnexpired(envToken)) return envToken;
   const user = process.env.SPRING_AUTH_USERNAME || process.env.SPRING_AUTH_EMAIL;
   const pass = process.env.SPRING_AUTH_PASSWORD;
-  if (!user || !pass) return null;
-  const token = await loginSpring(user, pass);
-  cachedServiceToken = token;
-  return token;
+  if (user && pass) {
+    const token = await loginSpring(user, pass);
+    if (token) return token;
+  }
+  // Still attach the configured bearer so writes match the curl Authorization header.
+  return envToken || cachedServiceToken || null;
 }
 
 function springHeaders(token?: string | null) {

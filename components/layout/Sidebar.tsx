@@ -19,7 +19,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col h-screen fixed left-0 top-0">
       {/* Logo/Brand */}
-      <div className="px-4 py-6 bg-black">
+      <Link href="/offerings" className="px-4 py-6 bg-black block hover:bg-neutral-950 transition-colors">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
@@ -34,7 +34,7 @@ export default function Sidebar() {
             <div className="text-gray-400 text-[10px] uppercase tracking-wide">Enterprise Edition</div>
           </div>
         </div>
-      </div>
+      </Link>
 
       {/* Navigation */}
       <nav className="flex-1 p-3 pt-4">

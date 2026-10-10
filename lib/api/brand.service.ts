@@ -106,15 +106,15 @@ export function mapSpringBrandToEntity(b: SpringBrandResDTO): BrandEntity {
   return {
     id: b.brand_id,
     brand_name: b.brand_name,
-    manufacturer: b.manufacturer || `${b.brand_name} Group`,
+    manufacturer: b.manufacturer || '',
     code: b.code,
-    country: b.country || 'Italy',
-    country_code: b.country_code || 'IT',
+    country: b.country || '',
+    country_code: b.country_code || '',
     offerings_count: b.offerings_count ?? 0,
     categories,
     status: normalizedStatus,
     logo_url: b.logo_url || '/brands/default.svg',
-    updated_date: b.updated_date || 'Oct 24, 2023',
+    updated_date: b.updated_date || b.created_at || '',
     created_at: b.created_at,
   };
 }
@@ -189,12 +189,12 @@ export async function fetchBrandStatsFromBackend(): Promise<BrandStats | null> {
       const pendingReviewCount = Number(res.data.pending_review) || 0;
 
       return {
-        totalBrands: totalBrands > 0 ? totalBrands : 1284,
-        brandsGrowthPercentage: '+12%',
+        totalBrands,
+        brandsGrowthPercentage: '',
         activeOfferings,
         activeOfferingsFormatted: formatOfferingsCount(activeOfferings),
-        countriesCount: countriesCount > 0 ? countriesCount : 32,
-        pendingReviewCount: pendingReviewCount > 0 ? pendingReviewCount : 14,
+        countriesCount,
+        pendingReviewCount,
       };
     }
   } catch (err: any) {
