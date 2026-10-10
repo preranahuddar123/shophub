@@ -8,7 +8,7 @@ import {
   PRODUCT_IMPORT_TEMPLATE_HEADERS,
   suggestColumnMapping,
   type ColumnMapping,
-} from '@/lib/api/product-import-map';
+} from '@/lib/api/product-import-fields';
 
 type ImportResult = {
   created: number;
