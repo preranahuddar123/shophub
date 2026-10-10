@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
 import { getSessionFromRequest } from '@/lib/auth/account';
 import { ensureAuthSchema } from '@/lib/auth/ensure';
+import { fetchAllSpringProducts } from '@/lib/api/spring';
 
 function publishedExpr() {
   return `CAST(is_published AS UNSIGNED) = 1`;
@@ -13,6 +14,16 @@ export async function GET(request: NextRequest) {
     const session = getSessionFromRequest(request);
     if (!session || (session.role !== 'admin' && session.role !== 'enterprise')) {
       return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+    }
+
+    const springProducts = await fetchAllSpringProducts();
+    const scopedSpring =
+      session.role === 'enterprise'
+        ? springProducts.filter((item) => Number(item.created_by) === session.id || item.created_by == null)
+        : springProducts;
+    if (scopedSpring.length > 0) {
+      const quoteStats = await loadQuoteStats(getHomesMerryDbPool());
+      return NextResponse.json({ success: true, source: 'spring', ...buildStatsFromProducts(scopedSpring), quotes: quoteStats });
     }
 
     const pool = getHomesMerryDbPool();
@@ -77,6 +88,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      source: 'mysql',
       catalog: {
         total,
         active,
@@ -128,6 +140,88 @@ export async function GET(request: NextRequest) {
     console.error('[API /api/dashboard]', error);
     return NextResponse.json({ success: false, error: error.message || 'Failed to load dashboard' }, { status: 500 });
   }
+}
+
+function isPublishedProduct(item: any) {
+  const value = item?.is_published;
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function sellingPriceOf(item: any) {
+  return Number(item?.pricing?.selling_price ?? item?.selling_price ?? 0);
+}
+
+function primaryImageOf(item: any) {
+  return String(item?.media?.primary_image || item?.primary_image || '');
+}
+
+function hasDimensions(item: any) {
+  const dims = item?.specifications?.physical_dimensions || {};
+  return Number(dims.length || item?.length_cm || 0) > 0 || Number(dims.width || item?.width_cm || 0) > 0 || Number(dims.height || item?.height_cm || 0) > 0;
+}
+
+function buildStatsFromProducts(items: any[]) {
+  const total = items.length;
+  const active = items.filter((item) => isPublishedProduct(item) && String(item.publishing_status || item.internal?.visibility_status?.publishing_status || '').toUpperCase() !== 'ARCHIVED').length;
+  const archived = items.filter((item) => String(item.publishing_status || item.internal?.visibility_status?.publishing_status || '').toUpperCase() === 'ARCHIVED').length;
+  const drafts = Math.max(0, total - active - archived);
+  const products = items.filter((item) => String(item.offering_type || 'PRODUCT').toUpperCase() === 'PRODUCT').length;
+  const services = items.filter((item) => String(item.offering_type || '').toUpperCase() === 'SERVICE').length;
+  const packages = items.filter((item) => ['PACKAGE', 'BUNDLE'].includes(String(item.offering_type || '').toUpperCase())).length;
+  const missingImages = items.filter((item) => !primaryImageOf(item).trim()).length;
+  const missingPricing = items.filter((item) => !sellingPriceOf(item)).length;
+  const missingSpecs = items.filter((item) => !hasDimensions(item)).length;
+  const readyCount = items.filter((item) => primaryImageOf(item).trim() && sellingPriceOf(item) > 0).length;
+  const compositionTotal = Math.max(1, products + services + packages);
+  const sorted = [...items].sort((a, b) => Number(b.inventory?.current_stock ?? b.current_stock ?? 0) - Number(a.inventory?.current_stock ?? a.current_stock ?? 0));
+
+  return {
+    catalog: {
+      total,
+      active,
+      drafts,
+      archived,
+      activeShare: total ? Math.round((active / total) * 100) : 0,
+    },
+    health: {
+      percent: total ? Math.round((readyCount / total) * 100) : 0,
+      skuWarnings: missingImages + missingPricing + missingSpecs,
+      missingImages,
+      missingPricing,
+      missingSpecs,
+    },
+    composition: {
+      products,
+      services,
+      packages,
+      productShare: Math.round((products / compositionTotal) * 100),
+      serviceShare: Math.round((services / compositionTotal) * 100),
+      packageShare: Math.round((packages / compositionTotal) * 100),
+    },
+    mostUsed: sorted.slice(0, 5).map((item) => ({
+      prodId: item.prodId ?? item.prod_id,
+      offering_name: item.offering_name,
+      sku_id: item.sku_id,
+      category: item.category || 'GENERAL',
+      offering_type: item.offering_type || 'PRODUCT',
+      selling_price: sellingPriceOf(item),
+      units: item.pricing?.units || item.price_unit || 'PER_PIECE',
+      current_stock: Number(item.inventory?.current_stock ?? item.current_stock ?? 0),
+      primary_image: primaryImageOf(item),
+      inStock: Number(item.inventory?.current_stock ?? item.current_stock ?? 0) > Number(item.inventory?.minimum_stock_level ?? 0),
+    })),
+    recentActivity: [...items].reverse().slice(0, 6).map((item) => {
+      const published = isPublishedProduct(item);
+      const status = String(item.internal?.visibility_status?.publishing_status || item.publishing_status || (published ? 'PUBLISHED' : 'DRAFT')).toUpperCase();
+      return {
+        prodId: item.prodId ?? item.prod_id,
+        offering_name: item.offering_name,
+        sku_id: item.sku_id,
+        action: status === 'PUBLISHED' ? 'published' : status === 'ARCHIVED' ? 'archived' : 'saved as draft',
+        category: item.category || '',
+      };
+    }),
+  };
 }
 
 async function loadQuoteStats(pool: ReturnType<typeof getHomesMerryDbPool>) {

@@ -13,11 +13,8 @@
   --font-serif: var(--font-manrope);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0F0E0E;
-    --foreground: #F5F2EB;
-  }
+html {
+  color-scheme: light;
 }
 
 html,

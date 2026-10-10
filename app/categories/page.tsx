@@ -1,8 +1,22 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopHeader from '@/components/layout/TopHeader';
+import {
+  getAllPrimaryCategories,
+  getAllSecondaryCategories,
+  getCategoriesByPrimary,
+  createPrimaryCategory,
+  createSecondaryCategory,
+  createSubCategory,
+  updatePrimaryCategory,
+  updateSecondaryCategory,
+  getPrimaryCategoryById,
+  getSecondaryCategoryById,
+  deletePrimaryCategory,
+  deleteSecondaryCategory,
+} from '@/lib/api/category.service';
 
 interface TreeNode {
   id: string; // e.g. "p-1", "s-1", "sub-1"
@@ -19,196 +33,96 @@ interface TreeNode {
   parentId?: number;
   primaryId?: number;
   breadcrumb?: string;
+  pathNames?: string[];
   icon?: string;
+  imageUrl?: string;
 }
 
-// Initial Static UI Mock Catalog Data (No API calls / backend integration)
-const INITIAL_TREE_DATA: TreeNode[] = [
-  {
-    id: 'p-1',
-    numericId: 1,
+function toBreadcrumb(names: string[]) {
+  return names.map((name) => name.trim().toUpperCase()).filter(Boolean).join(' > ');
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function mapSecondary(
+  cat: any,
+  ancestors: string[] = [],
+  type: TreeNode['type'] = 'secondary',
+  primaryId?: number
+): TreeNode {
+  const id = Number(cat.secondaryCategoryId ?? cat.id ?? 0);
+  const name = cat.secondaryCategoryName || cat.name || 'Category';
+  const nested = Array.isArray(cat.subCategory) ? cat.subCategory : [];
+  const parentPrimary = Number(cat.primaryCategoryId ?? primaryId ?? 0) || undefined;
+  const pathNames = [...ancestors, name];
+  return {
+    id: `${type === 'sub' ? 'sub' : 's'}-${id}`,
+    numericId: id,
+    type,
+    name,
+    description: cat.secondaryCategoryDescription || cat.description || '',
+    slug: cat.seo?.url_slug || slugify(name),
+    metaTitle: cat.seo?.page_title || '',
+    metaDescription: cat.seo?.meta_desc || '',
+    tags: cat.internalTags || cat.seo?.keywords || [],
+    imageUrl: cat.imageUrl || '',
+    primaryId: parentPrimary,
+    productCount: Array.isArray(cat.products) ? cat.products.length : undefined,
+    pathNames,
+    breadcrumb: toBreadcrumb(pathNames),
+    children: nested.map((child: any) => mapSecondary(child, pathNames, 'sub', parentPrimary)),
+  };
+}
+
+function mapPrimary(cat: any, secondaries: any[] = []): TreeNode {
+  const id = Number(cat.primaryCategoryId ?? cat.id ?? 0);
+  const name = cat.primaryCategoryName || cat.name || 'Category';
+  const pathNames = [name];
+  const kids = (secondaries.length ? secondaries : cat.subCategory || []).map((s: any) =>
+    mapSecondary(s, pathNames, 'secondary', id)
+  );
+  return {
+    id: `p-${id}`,
+    numericId: id,
     type: 'primary',
-    name: 'Furniture',
+    name,
     icon: 'folder',
-    description: 'High quality architectural & residential furniture systems.',
-    slug: 'furniture',
-    children: [
-      {
-        id: 's-1',
-        numericId: 1,
-        type: 'secondary',
-        name: 'Wardrobes',
-        productCount: 12,
-        breadcrumb: 'FURNITURE > WARDROBES',
-        description: 'Bespoke modular and built-in wardrobe solutions.',
-        slug: 'wardrobes',
-        children: [
-          {
-            id: 'sub-1',
-            numericId: 101,
-            type: 'sub',
-            name: 'Sliding Doors',
-            breadcrumb: 'FURNITURE > WARDROBES',
-            description: 'Smooth sliding door wardrobe systems with acoustic dampers.',
-            slug: 'sliding-doors',
-            tags: ['SLIDING', 'MODULAR'],
-          },
-          {
-            id: 'sub-2',
-            numericId: 102,
-            type: 'sub',
-            name: 'Premium Collection',
-            breadcrumb: 'FURNITURE > WARDROBES',
-            description:
-              'Exclusive high-end wardrobe systems featuring premium Italian leather finishes, integrated smart lighting, and soft-close acoustic dampening technology.',
-            slug: 'premium-collection',
-            metaTitle: 'Luxury Italian Wardrobes | Premium Collection',
-            metaDescription:
-              'Discover our premium range of bespoke wardrobes. Handcrafted excellence meets modern luxury.',
-            tags: ['LUXURY', 'IMPORTED', 'ITALIAN'],
-          },
-          {
-            id: 'sub-3',
-            numericId: 103,
-            type: 'sub',
-            name: 'Hinged Doors',
-            breadcrumb: 'FURNITURE > WARDROBES',
-            description: 'Classic hinged door wardrobes with custom milled profiles.',
-            slug: 'hinged-doors',
-            tags: ['HINGED', 'CLASSIC'],
-          },
-        ],
-      },
-      {
-        id: 's-2',
-        numericId: 2,
-        type: 'secondary',
-        name: 'Seating',
-        productCount: 8,
-        breadcrumb: 'FURNITURE > SEATING',
-        description: 'Ergonomic chairs, lounges, and modular sectional sofas.',
-        slug: 'seating',
-        children: [
-          {
-            id: 'sub-4',
-            numericId: 104,
-            type: 'sub',
-            name: 'Lounge Chairs',
-            breadcrumb: 'FURNITURE > SEATING',
-            description: 'Comfort-engineered accent and lounge chairs.',
-            slug: 'lounge-chairs',
-            tags: ['ACCENT', 'LOUNGE'],
-          },
-          {
-            id: 'sub-5',
-            numericId: 105,
-            type: 'sub',
-            name: 'Dining Chairs',
-            breadcrumb: 'FURNITURE > SEATING',
-            description: 'Solid wood and upholstered dining seating.',
-            slug: 'dining-chairs',
-            tags: ['DINING', 'SOLID WOOD'],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'p-2',
-    numericId: 2,
-    type: 'primary',
-    name: 'Lighting',
-    icon: 'bulb',
-    description: 'Architectural lighting fixtures, pendants, and recessed LEDs.',
-    slug: 'lighting',
-    children: [
-      {
-        id: 's-3',
-        numericId: 3,
-        type: 'secondary',
-        name: 'Pendants',
-        productCount: 6,
-        breadcrumb: 'LIGHTING > PENDANTS',
-        description: 'Statement drop lights and island chandeliers.',
-        slug: 'pendants',
-        children: [],
-      },
-      {
-        id: 's-4',
-        numericId: 4,
-        type: 'secondary',
-        name: 'Recessed & Track',
-        productCount: 14,
-        breadcrumb: 'LIGHTING > RECESSED & TRACK',
-        description: 'Directional track lighting and magnetic track fixtures.',
-        slug: 'recessed-track',
-        children: [],
-      },
-    ],
-  },
-  {
-    id: 'p-3',
-    numericId: 3,
-    type: 'primary',
-    name: 'Finishes',
-    icon: 'palette',
-    description: 'Veneers, laminates, quartz surfaces, and metallic coatings.',
-    slug: 'finishes',
-    children: [
-      {
-        id: 's-5',
-        numericId: 5,
-        type: 'secondary',
-        name: 'Natural Veneers',
-        productCount: 22,
-        breadcrumb: 'FINISHES > NATURAL VENEERS',
-        description: 'FSC-certified smoked oak, walnut, and teak veneers.',
-        slug: 'natural-veneers',
-        children: [],
-      },
-    ],
-  },
-  {
-    id: 'p-4',
-    numericId: 4,
-    type: 'primary',
-    name: 'Hardware',
-    icon: 'wrench',
-    description: 'Precision hinges, slide systems, and custom architectural pulls.',
-    slug: 'hardware',
-    children: [],
-  },
-];
+    description: cat.primaryCategoryDescription || cat.description || '',
+    slug: cat.seo?.url_slug || slugify(name),
+    metaTitle: cat.seo?.page_title || '',
+    metaDescription: cat.seo?.meta_desc || '',
+    tags: cat.internalTags || cat.seo?.keywords || [],
+    imageUrl: cat.imageUrl || '',
+    productCount: Array.isArray(cat.products) ? cat.products.length : undefined,
+    pathNames,
+    breadcrumb: toBreadcrumb(pathNames),
+    children: kids,
+  };
+}
 
 export default function CategoriesPage() {
-  // Static In-Memory Tree State (UI Only)
-  const [treeData, setTreeData] = useState<TreeNode[]>(INITIAL_TREE_DATA);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [isLoadingTree, setIsLoadingTree] = useState(true);
 
   // Search filter
   const [searchQuery, setSearchQuery] = useState('');
 
   // Tree expanded nodes
-  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
-    'p-1': true, // Furniture expanded
-    's-1': true, // Wardrobes expanded
-  });
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   // Selected Category
-  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(
-    INITIAL_TREE_DATA[0].children![0].children![1] // Default to "Premium Collection"
-  );
+  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
 
   // Form Edit State
-  const [categoryName, setCategoryName] = useState('Premium Collection');
-  const [urlSlug, setUrlSlug] = useState('premium-collection');
-  const [description, setDescription] = useState(
-    'Exclusive high-end wardrobe systems featuring premium Italian leather finishes, integrated smart lighting, and soft-close acoustic dampening technology.'
-  );
-  const [metaTitle, setMetaTitle] = useState('Luxury Italian Wardrobes | Premium Collection');
-  const [metaDescription, setMetaDescription] = useState(
-    'Discover our premium range of bespoke wardrobes. Handcrafted excellence meets modern luxury.'
-  );
-  const [tags, setTags] = useState<string[]>(['LUXURY', 'IMPORTED', 'ITALIAN']);
+  const [categoryName, setCategoryName] = useState('');
+  const [urlSlug, setUrlSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [metaTitle, setMetaTitle] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [imageUrl, setImageUrl] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
 
@@ -217,14 +131,11 @@ export default function CategoriesPage() {
     name: string;
     size: string;
     dimensions: string;
-  } | null>({
-    name: 'hero_wardrobe_leather.jpg',
-    size: '2.4 MB',
-    dimensions: '2400 × 1200',
-  });
+  } | null>(null);
 
   // Feedback & Toasts
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Modal State for adding new category
   const [showAddModal, setShowAddModal] = useState(false);
@@ -241,30 +152,111 @@ export default function CategoriesPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Select a node and populate editor form
-  const selectNode = (node: TreeNode) => {
+  const loadCategories = useCallback(async (selectId?: string) => {
+    setIsLoadingTree(true);
+    try {
+      const [primaries, allSecondaries] = await Promise.all([
+        getAllPrimaryCategories(),
+        getAllSecondaryCategories(),
+      ]);
+      const grouped = new Map<number, any[]>();
+      for (const s of allSecondaries as any[]) {
+        const pid = Number(s.primaryCategoryId ?? s.primary_category_id ?? s.primaryCategory?.primaryCategoryId ?? 0);
+        if (!pid) continue;
+        const list = grouped.get(pid) || [];
+        list.push(s);
+        grouped.set(pid, list);
+      }
+      const tree = await Promise.all(
+        primaries.map(async (primary) => {
+          const id = primary.primaryCategoryId;
+          const nested = Array.isArray(primary.subCategory) ? primary.subCategory : [];
+          let secondaries = nested.length ? nested : id != null ? await getCategoriesByPrimary(id) : [];
+          if (!secondaries.length && id != null) secondaries = grouped.get(Number(id)) || [];
+          return mapPrimary(primary, secondaries);
+        })
+      );
+      setTreeData(tree);
+      setExpandedNodes((prev) => {
+        const next = { ...prev };
+        tree.forEach((node) => {
+          if (next[node.id] === undefined) next[node.id] = true;
+        });
+        return next;
+      });
+      const flat = tree.flatMap((p) => [p, ...(p.children || []).flatMap((s) => [s, ...(s.children || [])])]);
+      const chosen = (selectId && flat.find((n) => n.id === selectId)) || flat[0] || null;
+      if (chosen) {
+        setSelectedNode(chosen);
+        setCategoryName(chosen.name);
+        setUrlSlug(chosen.slug || slugify(chosen.name));
+        setDescription(chosen.description || '');
+        setMetaTitle(chosen.metaTitle || '');
+        setMetaDescription(chosen.metaDescription || '');
+        setTags(chosen.tags || []);
+        setImageUrl(chosen.imageUrl || '');
+        setAssetFile(chosen.imageUrl ? { name: chosen.imageUrl.split('/').pop() || 'image', size: '', dimensions: '' } : null);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load categories');
+    } finally {
+      setIsLoadingTree(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  const writePayload = () => ({
+    name: categoryName.trim(),
+    description: description.trim(),
+    imageUrl,
+    seo: {
+      page_title: metaTitle.trim() || categoryName.trim(),
+      meta_desc: metaDescription.trim() || description.trim(),
+      url_slug: urlSlug.trim() || slugify(categoryName),
+      keywords: tags,
+    },
+    internalTags: tags,
+  });
+
+  const applyNodeToForm = (node: TreeNode) => {
     setSelectedNode(node);
     setCategoryName(node.name);
-    setUrlSlug(node.slug || node.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-    setDescription(
-      node.description ||
-        (node.name === 'Premium Collection'
-          ? 'Exclusive high-end wardrobe systems featuring premium Italian leather finishes, integrated smart lighting, and soft-close acoustic dampening technology.'
-          : `Collection of premium ${node.name.toLowerCase()} offerings and architectural solutions.`)
-    );
-    setMetaTitle(
-      node.metaTitle ||
-        (node.name === 'Premium Collection'
-          ? 'Luxury Italian Wardrobes | Premium Collection'
-          : `${node.name} | Modern Architectural Catalog`)
-    );
-    setMetaDescription(
-      node.metaDescription ||
-        (node.name === 'Premium Collection'
-          ? 'Discover our premium range of bespoke wardrobes. Handcrafted excellence meets modern luxury.'
-          : `Explore bespoke ${node.name.toLowerCase()} designed for modern residential and commercial interiors.`)
-    );
-    setTags(node.tags || ['MODERN', 'ARCHITECTURAL']);
+    setUrlSlug(node.slug || slugify(node.name));
+    setDescription(node.description || '');
+    setMetaTitle(node.metaTitle || '');
+    setMetaDescription(node.metaDescription || '');
+    setTags(node.tags || []);
+    setImageUrl(node.imageUrl || '');
+    setAssetFile(node.imageUrl ? { name: node.imageUrl.split('/').pop() || 'image', size: '', dimensions: '' } : null);
+  };
+
+  const selectNode = async (node: TreeNode) => {
+    applyNodeToForm(node);
+    try {
+      if (node.type === 'primary') {
+        const detail = await getPrimaryCategoryById(node.numericId);
+        if (detail) {
+          const mapped = mapPrimary(detail, []);
+          applyNodeToForm({ ...mapped, children: node.children, id: node.id });
+        }
+      } else {
+        const detail = await getSecondaryCategoryById(node.numericId);
+        if (detail) {
+          const ancestors = (node.pathNames || []).slice(0, -1);
+          applyNodeToForm({
+            ...mapSecondary(detail, ancestors, node.type, node.primaryId),
+            id: node.id,
+            children: node.children,
+            primaryId: node.primaryId,
+          });
+        }
+      }
+    } catch {
+      /* keep list data if detail fetch fails */
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -303,56 +295,72 @@ export default function CategoriesPage() {
       .filter(Boolean) as TreeNode[];
   }, [treeData, searchQuery]);
 
+  const liveBreadcrumb = useMemo(() => {
+    const current = categoryName.trim() || selectedNode?.name || '';
+    const ancestors = (selectedNode?.pathNames || []).slice(0, -1);
+    return toBreadcrumb(current ? [...ancestors, current] : ancestors);
+  }, [selectedNode, categoryName]);
+
   // ============================================================================
   // UI-ONLY ACTIONS: SAVE, DISCARD, ADD TAG, REMOVE TAG, ADD CATEGORY
   // ============================================================================
 
-  const handleSaveCategory = () => {
-    if (!selectedNode) return;
-
-    // Update in-memory tree state
-    const updateRecursive = (nodes: TreeNode[]): TreeNode[] => {
-      return nodes.map((n) => {
-        if (n.id === selectedNode.id) {
-          return {
-            ...n,
-            name: categoryName,
-            slug: urlSlug,
-            description,
-            metaTitle,
-            metaDescription,
-            tags,
-          };
-        }
-        if (n.children && n.children.length > 0) {
-          return { ...n, children: updateRecursive(n.children) };
-        }
-        return n;
-      });
-    };
-
-    setTreeData((prev) => updateRecursive(prev));
-    setSelectedNode((prev) =>
-      prev
-        ? {
-            ...prev,
-            name: categoryName,
-            slug: urlSlug,
-            description,
-            metaTitle,
-            metaDescription,
-            tags,
-          }
-        : null
-    );
-
-    showToast(`Category "${categoryName}" updated successfully!`);
+  const handleSaveCategory = async () => {
+    if (!categoryName.trim()) {
+      showToast('Enter a category name before saving.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = writePayload();
+      if (!selectedNode) {
+        const created = await createPrimaryCategory(payload);
+        const node = mapPrimary(created);
+        showToast(`Category "${payload.name}" created.`);
+        await loadCategories(node.numericId ? node.id : undefined);
+        setTreeData((prev) => {
+          if (prev.some((item) => item.numericId && item.numericId === node.numericId)) return prev;
+          if (prev.length === 0) return [node];
+          return prev;
+        });
+        if (node.name) applyNodeToForm(node);
+        return;
+      }
+      if (selectedNode.type === 'primary') {
+        await updatePrimaryCategory(selectedNode.numericId, payload);
+      } else {
+        await updateSecondaryCategory(selectedNode.numericId, payload);
+      }
+      await loadCategories(selectedNode.id);
+      showToast(`Category "${payload.name}" updated.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save category');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDiscard = () => {
     if (selectedNode) {
       selectNode(selectedNode);
       showToast('Changes discarded.');
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedNode) return;
+    const confirmed = window.confirm(`Delete "${selectedNode.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      if (selectedNode.type === 'primary') {
+        await deletePrimaryCategory(selectedNode.numericId);
+      } else {
+        await deleteSecondaryCategory(selectedNode.numericId);
+      }
+      showToast(`Category "${selectedNode.name}" deleted.`);
+      await loadCategories();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete category');
     }
   };
 
@@ -371,82 +379,37 @@ export default function CategoriesPage() {
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  const handleCreateNewCategory = (e: React.FormEvent) => {
+  const handleCreateNewCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
-
-    const newId = Date.now();
-    const slug = newCategoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-    if (!modalTargetParent) {
-      // Create root primary category
-      const newPrimary: TreeNode = {
-        id: `p-${newId}`,
-        numericId: newId,
-        type: 'primary',
-        name: newCategoryName.trim(),
-        description: newCategoryDesc.trim(),
-        slug,
-        icon: 'folder',
-        children: [],
-      };
-      setTreeData((prev) => [...prev, newPrimary]);
-      selectNode(newPrimary);
-    } else if (modalTargetParent.type === 'primary') {
-      // Create secondary category under primary
-      const newSecondary: TreeNode = {
-        id: `s-${newId}`,
-        numericId: newId,
-        type: 'secondary',
-        name: newCategoryName.trim(),
-        description: newCategoryDesc.trim(),
-        slug,
-        breadcrumb: `${modalTargetParent.name.toUpperCase()} > ${newCategoryName.toUpperCase()}`,
-        children: [],
-      };
-
-      setTreeData((prev) =>
-        prev.map((p) => {
-          if (p.numericId === modalTargetParent.id) {
-            return { ...p, children: [...(p.children || []), newSecondary] };
-          }
-          return p;
-        })
-      );
-      setExpandedNodes((prev) => ({ ...prev, [`p-${modalTargetParent.id}`]: true }));
-      selectNode(newSecondary);
-    } else {
-      // Create subcategory under secondary
-      const newSub: TreeNode = {
-        id: `sub-${newId}`,
-        numericId: newId,
-        type: 'sub',
-        name: newCategoryName.trim(),
-        description: newCategoryDesc.trim(),
-        slug,
-        breadcrumb: `${modalTargetParent.name.toUpperCase()} > ${newCategoryName.toUpperCase()}`,
-      };
-
-      setTreeData((prev) =>
-        prev.map((p) => ({
-          ...p,
-          children: (p.children || []).map((sec) => {
-            if (sec.numericId === modalTargetParent.id) {
-              return { ...sec, children: [...(sec.children || []), newSub] };
-            }
-            return sec;
-          }),
-        }))
-      );
-      setExpandedNodes((prev) => ({ ...prev, [`s-${modalTargetParent.id}`]: true }));
-      selectNode(newSub);
+    const payload = {
+      name: newCategoryName.trim(),
+      description: newCategoryDesc.trim(),
+      seo: {
+        page_title: newCategoryName.trim(),
+        meta_desc: newCategoryDesc.trim(),
+        url_slug: slugify(newCategoryName),
+        keywords: [],
+      },
+      internalTags: [],
+    };
+    try {
+      if (!modalTargetParent) {
+        await createPrimaryCategory(payload);
+      } else if (modalTargetParent.type === 'primary') {
+        await createSecondaryCategory(modalTargetParent.id, payload);
+      } else {
+        await createSubCategory(modalTargetParent.id, payload);
+      }
+      showToast(`Category "${payload.name}" created.`);
+      setNewCategoryName('');
+      setNewCategoryDesc('');
+      setShowAddModal(false);
+      setModalTargetParent(null);
+      await loadCategories();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create category');
     }
-
-    showToast(`Category "${newCategoryName}" created!`);
-    setNewCategoryName('');
-    setNewCategoryDesc('');
-    setShowAddModal(false);
-    setModalTargetParent(null);
   };
 
   return (
@@ -490,14 +453,23 @@ export default function CategoriesPage() {
 
           {/* Tree Navigation */}
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
+            {isLoadingTree && <p className="px-2 py-6 text-xs text-gray-400">Loading categories…</p>}
+            {!isLoadingTree && filteredTreeData.length === 0 && (
+              <p className="px-2 py-6 text-xs text-gray-400">No categories yet. Use + to create a root category.</p>
+            )}
             {filteredTreeData.map((primary) => {
               const isExpanded = !!expandedNodes[primary.id];
               return (
                 <div key={primary.id} className="space-y-0.5">
                   {/* Primary Category Row */}
                   <div
-                    onClick={() => toggleExpand(primary.id)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-100 text-xs font-bold text-gray-800 cursor-pointer transition-colors"
+                    onClick={() => {
+                      toggleExpand(primary.id);
+                      selectNode(primary);
+                    }}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-100 text-xs font-bold text-gray-800 cursor-pointer transition-colors ${
+                      selectedNode?.id === primary.id ? 'bg-gray-100' : ''
+                    }`}
                   >
                     <svg
                       className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
@@ -629,21 +601,33 @@ export default function CategoriesPage() {
           {/* Top Breadcrumb & Actions */}
           <div className="flex items-center justify-between mb-2">
             <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-              {selectedNode?.breadcrumb || 'FURNITURE > WARDROBES'}
+              {liveBreadcrumb || 'CATEGORY'}
             </div>
 
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={handleDiscard}
                 className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg shadow-xs transition-colors"
               >
                 Discard
               </button>
+              {selectedNode && (
+                <button
+                  type="button"
+                  onClick={handleDeleteCategory}
+                  className="px-4 py-2 bg-white border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                >
+                  Delete
+                </button>
+              )}
               <button
+                type="button"
                 onClick={handleSaveCategory}
-                className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                disabled={isSaving}
+                className="px-4 py-2 bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
               >
-                Save Category
+                {isSaving ? 'Saving…' : selectedNode ? 'Save Category' : 'Create Category'}
               </button>
             </div>
           </div>
@@ -871,7 +855,7 @@ export default function CategoriesPage() {
               Enter details for the new category to add to the catalog structure.
             </p>
 
-            <form onSubmit={handleCreateNewCategory} className="space-y-4">
+            <form onSubmit={handleCreateNewCategory} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   CATEGORY NAME
@@ -881,7 +865,7 @@ export default function CategoriesPage() {
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="e.g. Walk-in Closets"
-                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
+                  className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black"
                   autoFocus
                 />
               </div>
@@ -895,7 +879,7 @@ export default function CategoriesPage() {
                   value={newCategoryDesc}
                   onChange={(e) => setNewCategoryDesc(e.target.value)}
                   placeholder="Brief description..."
-                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black resize-none"
+                  className="w-full text-xs font-medium text-gray-900 bg-white caret-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-black resize-none"
                 />
               </div>
 

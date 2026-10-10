@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHomesMerryDbPool } from '@/lib/db/homesmerry';
 import { getSessionFromRequest } from '@/lib/auth/account';
 import { ensureAuthSchema } from '@/lib/auth/ensure';
+import { fetchSpringProducts, springProductPage } from '@/lib/api/spring';
 
 function isPublishedRow(row: any): boolean {
   const value = row?.is_published;
@@ -139,6 +140,36 @@ export async function GET(request: NextRequest) {
 
     const page = Math.max(0, Number(searchParams.get('page') || 0));
     const size = Math.min(200, Math.max(1, Number(searchParams.get('size') || 50)));
+    const publishedParam = searchParams.get('is_published');
+    const isPublished =
+      publishedParam == null ? true : publishedParam === 'true' || publishedParam === '1';
+    const spring = await fetchSpringProducts({
+      isPublished,
+      page,
+      size,
+      sort: searchParams.get('sort') || 'prodId,asc',
+    });
+    if (spring.ok) {
+      const parsed = springProductPage(spring.data);
+      let content = parsed.content;
+      if (session.role === 'enterprise') {
+        content = content.filter((item: any) => Number(item.created_by) === session.id || item.created_by == null);
+      }
+      const totalPages = Math.max(1, parsed.totalPages || Math.ceil((parsed.totalElements || content.length) / size));
+      return NextResponse.json({
+        content,
+        totalElements: parsed.totalElements || content.length,
+        totalPages,
+        size,
+        number: page,
+        first: page === 0,
+        last: page >= totalPages - 1,
+        numberOfElements: content.length,
+        empty: content.length === 0,
+        source: 'spring',
+      });
+    }
+
     const offset = page * size;
 
     const [countRows]: any = await pool.query(

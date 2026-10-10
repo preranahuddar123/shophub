@@ -6,7 +6,7 @@ import TopHeader from '@/components/layout/TopHeader';
 import CatalogWelcome from '@/components/layout/CatalogWelcome';
 import OfferingFilters from '@/components/offerings/OfferingFilters';
 import OfferingTable from '@/components/offerings/OfferingTable';
-import { OfferingGrid, OfferingMatrix } from '@/components/offerings/OfferingGallery';
+import { OfferingGrid, OfferingMatrix } from './OfferingGallery';
 import Pagination from '@/components/offerings/Pagination';
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
 import {
